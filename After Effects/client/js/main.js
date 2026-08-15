@@ -519,14 +519,21 @@ var TranscriptViewer = {
         var container = document.getElementById("transcriptBody");
         var wordCountBadge = document.getElementById("lblWordCountBadge");
         var statsEl = document.getElementById("lblTranscriptStats");
-        if (!container) return;
+        var successContainer = document.getElementById("transcribeSuccessContainer");
 
+        if (successContainer) {
+            successContainer.style.display = "flex";
+        }
+
+        if (!container) return;
         container.innerHTML = "";
+
         var totalWords = this.words.length;
-        if (wordCountBadge) wordCountBadge.innerText = totalWords + " Words";
+        if (wordCountBadge) wordCountBadge.innerText = totalWords + (totalWords === 1 ? " Word" : " Words");
 
         if (totalWords === 0) {
-            container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 24px;">No transcript data available.</div>';
+            container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 11px;">No transcript words available.</div>';
+            if (statsEl) statsEl.innerText = "0 words";
             return;
         }
 
@@ -535,10 +542,12 @@ var TranscriptViewer = {
         pDiv.className = "transcript-paragraph";
 
         var pauseCount = 0;
+        var paragraphCount = 1;
 
         for (var i = 0; i < this.words.length; i++) {
             var item = this.words[i];
             var wordStr = (item.word || item.text || "").trim();
+            if (!wordStr) continue;
 
             // Word span
             var wordSpan = document.createElement("span");
@@ -560,13 +569,13 @@ var TranscriptViewer = {
                 wordSpan.classList.add("word-censored");
             }
 
-            (function(startSec) {
-                wordSpan.addEventListener("click", function() {
+            (function(startSec, spanEl) {
+                spanEl.addEventListener("click", function() {
                     ExtendScriptBridge.setPlayhead(startSec);
                     document.querySelectorAll(".transcript-word").forEach(function(w) { w.classList.remove("word-playhead-active"); });
-                    wordSpan.classList.add("word-playhead-active");
+                    spanEl.classList.add("word-playhead-active");
                 });
-            })(item.start);
+            })(item.start, wordSpan);
 
             pDiv.appendChild(wordSpan);
 
@@ -591,13 +600,24 @@ var TranscriptViewer = {
                     pDiv.appendChild(pauseSpan);
                     pDiv.appendChild(document.createTextNode(" "));
                 }
+
+                // Break into paragraphs for long pauses or natural section breaks
+                var isPunctuationEnd = /[.!?]$/.test(wordStr);
+                if (gap >= 2.0 || (isPunctuationEnd && gap >= 1.0)) {
+                    container.appendChild(pDiv);
+                    pDiv = document.createElement("div");
+                    pDiv.className = "transcript-paragraph";
+                    paragraphCount++;
+                }
             }
         }
 
-        container.appendChild(pDiv);
+        if (pDiv.childNodes.length > 0) {
+            container.appendChild(pDiv);
+        }
 
         if (statsEl) {
-            statsEl.innerText = `${totalWords} words | ${pauseCount} pauses`;
+            statsEl.innerText = `${totalWords} words | ${pauseCount} pauses | ${paragraphCount} para`;
         }
 
         this.updateSearchMatches();
@@ -680,6 +700,14 @@ document.addEventListener("DOMContentLoaded", function() {
             if (targetId === "tab-settings" && typeof SettingsManager !== "undefined") {
                 SettingsManager.checkLicenseStatus();
                 SettingsManager.renderModelManager();
+            }
+
+            // Ensure transcript container stays visible when returning to Transcript tab
+            if (targetId === "tab-transcribe") {
+                if (TranscriptViewer.words && TranscriptViewer.words.length > 0) {
+                    var sc = document.getElementById("transcribeSuccessContainer");
+                    if (sc) sc.style.display = "flex";
+                }
             }
         });
     });
@@ -1172,6 +1200,30 @@ function runTranscribeWorkflow() {
                         var finalCaptions = backendRes.captions || [];
                         var finalWords = backendRes.words || [];
 
+                        // If word tokens are missing or empty, derive words accurately from caption cues
+                        if ((!finalWords || finalWords.length === 0) && finalCaptions && finalCaptions.length > 0) {
+                            finalWords = [];
+                            finalCaptions.forEach(function(cap) {
+                                var capText = (cap.text || "").trim();
+                                if (!capText) return;
+                                var wordsInCap = capText.split(/\s+/);
+                                var capStart = parseFloat(cap.start) || 0;
+                                var capEnd = parseFloat(cap.end) || (capStart + 1.0);
+                                var capDur = Math.max(0.1, capEnd - capStart);
+                                var durPerWord = capDur / Math.max(1, wordsInCap.length);
+
+                                wordsInCap.forEach(function(wStr, wIdx) {
+                                    var wStart = capStart + (wIdx * durPerWord);
+                                    var wEnd = wStart + durPerWord;
+                                    finalWords.push({
+                                        word: wStr,
+                                        start: Math.round(wStart * 1000) / 1000,
+                                        end: Math.round(wEnd * 1000) / 1000
+                                    });
+                                });
+                            });
+                        }
+
                         if (offset > 0) {
                             finalCaptions = finalCaptions.map(function(c) {
                                 return Object.assign({}, c, {
@@ -1187,12 +1239,14 @@ function runTranscribeWorkflow() {
                             });
                         }
 
-                        // 1. Load into Subtitle Editor
+                        // 1. Load into Subtitle Editor (Captions Tab)
                         SubtitleEditor.loadCaptions(finalCaptions, finalWords);
 
-                        // 2. Render Interactive Transcript
+                        // 2. Render Interactive Transcript (Transcript Tab)
                         var successContainer = document.getElementById("transcribeSuccessContainer");
-                        if (successContainer) successContainer.style.display = "flex";
+                        if (successContainer) {
+                            successContainer.style.display = "flex";
+                        }
                         TranscriptViewer.render(finalWords);
 
                         // 3. Update active comp status badge
