@@ -17,11 +17,11 @@
         </div>
         <div class="header-right">
             <span class="version-tag">AE v2.0.0</span>
-            <span class="status-pill" id="hostBadge">ULTRA</span>
+            <span class="status-pill" id="hostBadge">AE ULTRA</span>
         </div>
     </header>
 
-    <!-- Navigation Tabs -->
+    <!-- Navigation Tabs (3 Tabs: Transcript, Captions, Settings) -->
     <nav class="nav-tabs">
         <button class="tab-btn active" data-tab="tab-transcribe">
             <svg class="tab-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
@@ -31,10 +31,6 @@
             <svg class="tab-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M7 15h4M15 15h2M7 11h10"/></svg>
             <span>Captions</span>
         </button>
-        <button class="tab-btn" data-tab="tab-stylize">
-            <svg class="tab-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
-            <span>Stylize</span>
-        </button>
         <button class="tab-btn" data-tab="tab-settings">
             <svg class="tab-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             <span>Settings</span>
@@ -43,7 +39,50 @@
 
     <!-- Tab 1: Transcript -->
     <main id="tab-transcribe" class="tab-content active">
-        <!-- Model Selection Card -->
+        <!-- 1. Active Composition Card -->
+        <div class="card" id="cardActiveComp">
+            <div class="card-header">
+                <span class="card-title">Active Composition</span>
+                <span class="badge-status checking" id="lblCompStatusBadge">Checking...</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px;">
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 10px;">Composition</div>
+                    <div style="font-weight: 600; color: var(--text-primary); margin-top: 2px;" id="lblActiveCompName">Checking comp...</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 10px;">Duration</div>
+                    <div style="font-weight: 600; color: var(--text-primary); font-family: monospace; margin-top: 2px;" id="lblActiveCompDur">--:--</div>
+                </div>
+                <div style="grid-column: span 2;">
+                    <div style="color: var(--text-secondary); font-size: 10px;">Timeline Layers</div>
+                    <div style="font-weight: 500; color: var(--text-primary); margin-top: 2px;" id="lblActiveCompLayers">Scanning layers...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Transcription Scope Card -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Transcription Scope</span>
+                <span class="val-badge" id="lblScopeBadge">Full Comp</span>
+            </div>
+            <div class="form-group">
+                <select id="selectTranscribeScope">
+                    <option value="full">Full Composition (All Media)</option>
+                    <option value="workarea">Work Area Only (In / Out)</option>
+                    <option value="selected">Selected Layers (Timeline Selection)</option>
+                </select>
+            </div>
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;" id="lblScopeStatus">
+                Scope: Full Composition (Entire timeline media range)
+            </div>
+            <div id="scopeSelectionNotice" style="display: none; background: var(--warning-subtle); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 6px 8px; font-size: 11px; color: #FBBF24;">
+                Select one or more audio/video layers in your After Effects composition timeline.
+            </div>
+        </div>
+
+        <!-- 3. Speech Model Card -->
         <div class="card">
             <div class="card-title">Speech Model</div>
             <div class="form-group">
@@ -57,78 +96,7 @@
             </div>
         </div>
 
-        <!-- After Effects Settings Card -->
-        <div class="card">
-            <div class="card-title">After Effects Settings</div>
-
-            <!-- Import Method -->
-            <div class="form-group">
-                <label for="selectImportMethod">Import Method in AE</label>
-                <select id="selectImportMethod">
-                    <option value="direct">Direct Text Layers in Active Comp</option>
-                    <option value="precomp">Pre-comp All Subtitle Layers</option>
-                </select>
-            </div>
-            
-            <!-- Max Characters -->
-            <div class="form-group">
-                <div class="label-row">
-                    <label for="sliderMaxChars">Max Characters Per Line</label>
-                    <div class="badge-group">
-                        <span class="val-badge" id="lblMaxCharsVal">37</span>
-                        <button class="reset-icon-btn" id="resetMaxChars" title="Reset to default (37)">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                        </button>
-                    </div>
-                </div>
-                <input type="range" id="sliderMaxChars" min="15" max="80" value="37">
-            </div>
-
-            <!-- Max Duration -->
-            <div class="form-group">
-                <div class="label-row">
-                    <label for="sliderMaxDur">Max Duration (Seconds)</label>
-                    <div class="badge-group">
-                        <span class="val-badge" id="lblMaxDurVal">3.0s</span>
-                        <button class="reset-icon-btn" id="resetMaxDur" title="Reset to default (3.0s)">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                        </button>
-                    </div>
-                </div>
-                <input type="range" id="sliderMaxDur" min="10" max="100" value="30">
-            </div>
-
-            <!-- Gap Frames -->
-            <div class="form-group">
-                <div class="label-row">
-                    <label for="sliderGapFrames">Gap (Frames)</label>
-                    <div class="badge-group">
-                        <span class="val-badge" id="lblGapFramesVal">0 frames</span>
-                        <button class="reset-icon-btn" id="resetGapFrames" title="Reset to default (0)">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                        </button>
-                    </div>
-                </div>
-                <input type="range" id="sliderGapFrames" min="0" max="10" value="0">
-            </div>
-
-            <!-- Line Mode -->
-            <div class="form-group">
-                <label>Line Mode</label>
-                <div class="radio-group">
-                    <label class="radio-label">
-                        <input type="radio" name="lineMode" value="double" checked>
-                        <span>Double Lines</span>
-                    </label>
-                    <label class="radio-label">
-                        <input type="radio" name="lineMode" value="single">
-                        <span>Single Line</span>
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <!-- Language & Translation Card -->
+        <!-- 4. Language & Translation Card -->
         <div class="card">
             <div class="card-title">Language & Translation</div>
             <div class="form-group">
@@ -155,7 +123,7 @@
             </div>
         </div>
 
-        <!-- AI Options Card -->
+        <!-- 5. AI Processing Options Card -->
         <div class="card">
             <div class="card-title">AI Processing Options</div>
             <div class="form-group">
@@ -172,101 +140,141 @@
             </div>
         </div>
 
-        <!-- Transcribe Action Button -->
-        <div style="display: flex; gap: 8px;">
-            <button class="btn-primary" id="btnTranscribe" style="flex: 1;">
-                Transcribe Active Comp
-            </button>
-            <button class="btn-danger" id="btnCancelTranscribe" style="display: none;">
-                Cancel
-            </button>
+        <!-- Transcribe Action Button & Progress -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-primary" id="btnTranscribe" style="flex: 1;">
+                    Transcribe Active Comp
+                </button>
+                <button class="btn-danger" id="btnCancelTranscribe" style="display: none;">
+                    Cancel
+                </button>
+            </div>
+
+            <!-- Progress & Skeleton Loader -->
+            <div id="transcribeProgressContainer" style="display: none;">
+                <div class="progress-wrap">
+                    <div class="label-row">
+                        <span id="transcribeStatusLog" style="font-size: 11px; color: var(--text-secondary);">Initializing local Whisper AI...</span>
+                        <span id="transcribePercentVal" class="val-badge">0%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-bar-fill" id="transcribeProgressFill"></div>
+                    </div>
+                </div>
+                <div class="skeleton-container" id="skeletonLoader">
+                    <div class="skeleton-line" style="width: 85%;"></div>
+                    <div class="skeleton-line" style="width: 95%;"></div>
+                    <div class="skeleton-line" style="width: 70%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. Interactive Transcript Card (Appears after Transcription) -->
+        <div class="transcript-viewer-card" id="transcribeSuccessContainer" style="display: none; margin-top: 4px;">
+            <div class="transcript-header-row">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-weight: 600; font-size: 12px; color: var(--text-primary);">Interactive Transcript</span>
+                    <span class="badge-status transcribed" id="lblWordCountBadge">0 Words</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <button class="btn-three-dot" id="btnTranscriptOptions" title="View Options">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                    </button>
+                </div>
+
+                <!-- Transcript Options Dropdown Menu -->
+                <div class="transcript-dropdown-menu" id="transcriptOptionsMenu">
+                    <div style="padding: 6px 8px; font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">View Options</div>
+                    <div style="padding: 4px 8px;">
+                        <div class="label-row">
+                            <span style="font-size: 11px; color: var(--text-secondary);">Min Pause Length</span>
+                            <span class="val-badge" id="lblMinPauseVal">0.30s</span>
+                        </div>
+                        <input type="range" id="sliderMinPause" min="5" max="200" value="30" style="margin: 4px 0;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Toolbar: Search & Filters -->
+            <div class="transcript-toolbar">
+                <div class="transcript-search-row">
+                    <div class="transcript-search-input-wrap">
+                        <input type="text" class="transcript-search-input" id="transcriptSearchInput" placeholder="Find words...">
+                        <button class="search-clear-btn" id="btnClearSearch" style="display: none;">&times;</button>
+                    </div>
+                    <button class="search-option-btn" id="btnMatchCase" title="Match Case">Aa</button>
+                    <button class="search-option-btn" id="btnWholeWord" title="Match Whole Word">W</button>
+                    <span class="search-matches-label" id="lblSearchMatches"></span>
+                </div>
+
+                <!-- Replace Bar -->
+                <div class="transcript-search-row" id="replaceRow">
+                    <input type="text" class="transcript-search-input" id="inputReplaceText" placeholder="Replace with...">
+                    <button class="btn-secondary" id="btnReplaceOne" style="padding: 3px 8px; font-size: 10px;">Replace</button>
+                    <button class="btn-secondary" id="btnReplaceAll" style="padding: 3px 8px; font-size: 10px;">All</button>
+                </div>
+
+                <!-- Filter Toggle Pills -->
+                <div class="filter-pills-row">
+                    <span class="filter-pill" id="pillFillerWords" title="Highlight filler words">Fillers</span>
+                    <span class="filter-pill" id="pillCensoredWords" title="Highlight censored words">Censored</span>
+                    <span class="filter-pill active-pauses" id="pillPauses" title="Toggle pause tokens">Pauses [..]</span>
+                    <span style="margin-left: auto; font-size: 10px; color: var(--text-muted);" id="lblTranscriptStats"></span>
+                </div>
+            </div>
+
+            <!-- Transcript Body (Words + Pauses with Playhead Click Navigation) -->
+            <div class="transcript-body" id="transcriptBody">
+                <!-- Dynamically populated with transcript words and pause tokens -->
+            </div>
         </div>
     </main>
 
     <!-- Tab 2: Captions -->
     <main id="tab-editor" class="tab-content">
-        <div class="editor-container">
-            <div class="editor-toolbar">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-weight: 600; color: var(--text-primary);" id="cueCounter">0 Subtitles</span>
-                    <span id="styleBadge" class="style-badge">Style: Standard</span>
-                </div>
-                <div style="display: flex; gap: 6px;">
-                    <button class="btn-secondary" id="btnAddCue" style="padding: 4px 10px; font-size: 11px;">+ Add Cue</button>
-                </div>
-            </div>
-
-            <div class="cue-list" id="cueList">
-                <div style="text-align: center; color: var(--text-muted); margin-top: 30px; padding: 24px 16px; background: var(--surface-elevated); border: 1px dashed var(--border); border-radius: var(--radius-card); font-size: 11px; line-height: 1.6;">
-                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px; font-size: 12px;">No captions generated yet.</div>
-                    <div>Go to the Transcript tab and click 'Transcribe Active Comp' to generate subtitles.</div>
-                </div>
-            </div>
-        </div>
-
-        <div style="display: flex; gap: 8px; margin-top: 4px;">
-            <button class="btn-primary" id="btnApplyEdits" style="flex: 2;">
-                Create Subtitles
-            </button>
-
-            <button class="btn-secondary" id="btnExportSRT" style="flex: 1;">
-                Export .SRT
-            </button>
-        </div>
-
-        <div style="display: flex; align-items: center; margin-top: 4px; font-size: 11px;">
-            <label class="checkbox-label" style="color: var(--text-secondary);">
-                <input type="checkbox" id="chkRemoveOldSubtitles" checked>
-                <span>Remove old subtitles when creating new ones</span>
-            </label>
-        </div>
-    </main>
-
-    <!-- Tab 3: Stylize -->
-    <main id="tab-stylize" class="tab-content">
-        <!-- Live Style Summary Banner -->
-        <div class="card stylize-summary-card">
-            <div class="card-title">Live Style Config</div>
-            <div id="stylizeSummary" class="stylize-summary-text">
-                Preset: Pop In | Target: All CGP Layers | Words: Full Cue | Size: 24px
-            </div>
-        </div>
-
-        <!-- 1. Text Animation Presets (.ffx & Built-in) -->
+        <!-- Caption Formatting & Appearance Card -->
         <div class="card">
-            <div class="card-header">
-                <span class="card-title">Text Presets (.ffx & Built-in)</span>
-                <button id="btnRefreshPresets" class="btn-secondary" style="padding: 2px 8px; font-size: 10px;" title="Refresh User Presets">Refresh</button>
-            </div>
+            <div class="card-title">Caption Appearance & Formatting</div>
+
+            <!-- Import Method in AE -->
             <div class="form-group">
-                <label for="inputAEPreset">Select Preset</label>
-                <div class="search-select" id="containerAEPreset">
-                    <input type="text" id="inputAEPreset" class="search-select-input" value="Pop In (Scale Pulse)" placeholder="Search presets..." readonly>
-                    <input type="hidden" id="selectAEPreset" value="pop_in">
-                    <div class="search-select-dropdown" id="dropdownAEPreset">
-                        <input type="text" class="search-select-filter" placeholder="Type preset name to search...">
-                        <div class="search-select-options"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="form-group" style="margin-top: 4px;">
-                <label for="selectKeyframeFit">Keyframe Alignment</label>
-                <select id="selectKeyframeFit">
-                    <option value="fit_duration">Fit Keyframes: First at Layer Start, Last at Layer End</option>
-                    <option value="start_only">Align First Keyframe to Layer Start (Original Spacing)</option>
-                    <option value="natural">Original Preset Timing (No Adjustment)</option>
+                <label for="selectImportMethod">Import Method in AE</label>
+                <select id="selectImportMethod">
+                    <option value="direct">Direct Text Layers in Active Comp</option>
+                    <option value="precomp">Pre-comp All Subtitle Layers</option>
                 </select>
             </div>
-        </div>
 
-        <!-- 2. Layout & Alignment (Icon Buttons) -->
-        <div class="card">
-            <div class="card-title">Layout & Alignment</div>
-            <input type="hidden" id="selectPosition" value="bottom">
-            <input type="hidden" id="selectAlign" value="center">
+            <!-- Words Per Layer -->
+            <div class="form-group">
+                <label for="selectWordsPerLayer">Words Per Text Layer</label>
+                <select id="selectWordsPerLayer">
+                    <option value="phrase">Standard Cue / Phrase (Default)</option>
+                    <option value="1">1 Word Per Layer (Single Word)</option>
+                    <option value="2">2 Words Per Layer</option>
+                </select>
+            </div>
 
-            <div style="margin-bottom: 8px;">
-                <label style="display: block; margin-bottom: 6px; font-size: 11px; color: var(--text-secondary);">Vertical Position</label>
+            <!-- Font Size & Text Color -->
+            <div class="form-row">
+                <div class="form-group half">
+                    <div class="label-row">
+                        <label for="sliderFontSize">Font Size</label>
+                        <span class="val-badge" id="lblFontSizeVal">48px</span>
+                    </div>
+                    <input type="range" id="sliderFontSize" min="16" max="120" value="48">
+                </div>
+                <div class="form-group half">
+                    <label for="colorText">Text Color</label>
+                    <input type="color" id="colorText" value="#FFFFFF">
+                </div>
+            </div>
+
+            <!-- Vertical Position -->
+            <div class="form-group">
+                <label>Vertical Position</label>
+                <input type="hidden" id="selectPosition" value="bottom">
                 <div class="icon-toggle-group" id="groupPosition">
                     <button class="icon-toggle-btn" data-val="top" title="Top Header">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="4" x2="20" y2="4"/><rect x="7" y="7" width="10" height="5" rx="1"/></svg>
@@ -283,8 +291,10 @@
                 </div>
             </div>
 
-            <div>
-                <label style="display: block; margin-bottom: 6px; font-size: 11px; color: var(--text-secondary);">Horizontal Alignment</label>
+            <!-- Horizontal Alignment -->
+            <div class="form-group">
+                <label>Horizontal Alignment</label>
+                <input type="hidden" id="selectAlign" value="center">
                 <div class="icon-toggle-group" id="groupAlign">
                     <button class="icon-toggle-btn" data-val="left" title="Align Left">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="18" y2="18"/></svg>
@@ -300,19 +310,91 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Max Characters & Max Duration -->
+            <div class="form-row">
+                <div class="form-group half">
+                    <div class="label-row">
+                        <label for="sliderMaxChars">Max Characters</label>
+                        <span class="val-badge" id="lblMaxCharsVal">37</span>
+                    </div>
+                    <input type="range" id="sliderMaxChars" min="15" max="80" value="37">
+                </div>
+                <div class="form-group half">
+                    <div class="label-row">
+                        <label for="sliderMaxDur">Max Duration</label>
+                        <span class="val-badge" id="lblMaxDurVal">3.0s</span>
+                    </div>
+                    <input type="range" id="sliderMaxDur" min="10" max="100" value="30">
+                </div>
+            </div>
+
+            <!-- Gap Frames & Line Mode -->
+            <div class="form-row">
+                <div class="form-group half">
+                    <div class="label-row">
+                        <label for="sliderGapFrames">Gap (Frames)</label>
+                        <span class="val-badge" id="lblGapFramesVal">0 frames</span>
+                    </div>
+                    <input type="range" id="sliderGapFrames" min="0" max="10" value="0">
+                </div>
+                <div class="form-group half">
+                    <label>Line Mode</label>
+                    <div class="radio-group" style="margin-top: 4px;">
+                        <label class="radio-label">
+                            <input type="radio" name="lineMode" value="double" checked>
+                            <span>Double</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="lineMode" value="single">
+                            <span>Single</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 2px;">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkRemoveOldSubtitles" checked>
+                    <span>Remove previous CGP caption layers before creating</span>
+                </label>
+            </div>
         </div>
 
-        <!-- 3. Action Buttons -->
-        <div class="card">
-            <div class="card-title">Actions</div>
-            <div style="display: flex; gap: 8px;">
-                <button id="btnApplyPresetSelected" class="btn-primary" style="flex: 1; font-weight: 600;">Apply Preset</button>
-                <button id="btnApplyAlignment" class="btn-secondary" style="flex: 1; font-weight: 600;">Apply Alignment</button>
+        <!-- Action Buttons -->
+        <div style="display: flex; gap: 8px;">
+            <button class="btn-primary" id="btnApplyEdits" style="flex: 2;">
+                Create Text Layers in Comp
+            </button>
+            <button class="btn-secondary" id="btnRefreshCues" style="flex: 1;" title="Regenerate cues from edited transcript">
+                Refresh Cues
+            </button>
+            <button class="btn-secondary" id="btnExportSRT" style="flex: 1;">
+                Export .SRT
+            </button>
+        </div>
+
+        <!-- Subtitle Cues Editor List -->
+        <div class="editor-container" style="margin-top: 4px;">
+            <div class="editor-toolbar">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-weight: 600; color: var(--text-primary);" id="cueCounter">0 Subtitles</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn-secondary" id="btnAddCue" style="padding: 4px 10px; font-size: 11px;">+ Add Cue</button>
+                </div>
+            </div>
+
+            <div class="cue-list" id="cueList">
+                <div style="text-align: center; color: var(--text-muted); margin-top: 20px; padding: 24px 16px; background: var(--surface-elevated); border: 1px dashed var(--border); border-radius: var(--radius-card); font-size: 11px; line-height: 1.6;">
+                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px; font-size: 12px;">No captions generated yet.</div>
+                    <div>Transcribe an active composition in the Transcript tab to generate subtitle cues.</div>
+                </div>
             </div>
         </div>
     </main>
 
-    <!-- Tab 4: Settings -->
+    <!-- Tab 3: Settings -->
     <main id="tab-settings" class="tab-content">
         <div class="card">
             <div class="card-title">License Activation</div>

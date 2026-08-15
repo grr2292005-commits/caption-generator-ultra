@@ -155,20 +155,105 @@ function getActiveComp() {
     return null;
 }
 
-$._PPP_.exportAudio = function(targetWavPath) {
+$._PPP_.getActiveCompInfo = function() {
+    try {
+        var comp = getActiveComp();
+        if (!comp) {
+            return "ERR|No active composition found in After Effects.";
+        }
+        var compName = comp.name || "Active Comp";
+        var duration = parseFloat(comp.duration) || 0;
+        var layerCount = parseInt(comp.numLayers, 10) || 0;
+        var workStart = parseFloat(comp.workAreaStart) || 0;
+        var workDur = parseFloat(comp.workAreaDuration) || duration;
+        var compId = comp.id || 0;
+
+        return "OK|" + compName + "|" + duration.toFixed(2) + "|" + layerCount + "|" + workStart.toFixed(2) + "|" + workDur.toFixed(2) + "|" + compId;
+    } catch(e) {
+        return "ERR|" + e.toString();
+    }
+};
+
+$._PPP_.getSelectedLayersInfo = function() {
+    try {
+        var comp = getActiveComp();
+        if (!comp) {
+            return "ERR|No active composition found.";
+        }
+
+        var selectedLayers = [];
+        var seenMedia = {};
+
+        if (comp.selectedLayers && comp.selectedLayers.length > 0) {
+            for (var i = 0; i < comp.selectedLayers.length; i++) {
+                var layer = comp.selectedLayers[i];
+                if (!layer || !layer.enabled) continue;
+
+                var f = getLayerSourceFile(layer);
+                if (!f) continue;
+
+                var filePath = f.fsName ? f.fsName.replace(/\\/g, "/") : (f.fullName ? f.fullName.replace(/\\/g, "/") : "");
+                if (!filePath) continue;
+
+                var lIn = parseFloat(layer.inPoint) || 0;
+                var lOut = parseFloat(layer.outPoint) || 0;
+                var dur = lOut - lIn;
+
+                if (dur > 0.05) {
+                    var key = Math.round(lIn * 100) + "_" + Math.round(lOut * 100);
+                    if (!seenMedia[key]) {
+                        seenMedia[key] = true;
+                        selectedLayers.push({
+                            index: layer.index,
+                            name: layer.name || ("Layer_" + layer.index),
+                            start: Math.round(lIn * 1000) / 1000,
+                            end: Math.round(lOut * 1000) / 1000,
+                            duration: Math.round(dur * 1000) / 1000,
+                            hasAudio: checkLayerHasAudio(layer),
+                            mediaPath: filePath
+                        });
+                    }
+                }
+            }
+        }
+
+        selectedLayers.sort(function(a, b) {
+            return a.start - b.start;
+        });
+
+        var totalDur = 0;
+        for (var k = 0; k < selectedLayers.length; k++) {
+            totalDur += selectedLayers[k].duration;
+        }
+
+        var resObj = {
+            selectedCount: selectedLayers.length,
+            totalDuration: Math.round(totalDur * 1000) / 1000,
+            layers: selectedLayers
+        };
+
+        return "OK|" + stringifyJson(resObj);
+    } catch(e) {
+        return "ERR|" + e.toString();
+    }
+};
+
+$._PPP_.exportAudio = function(targetWavPath, scopeMode) {
     try {
         var comp = getActiveComp();
         if (!comp) {
             return "ERR|Could not read the active composition. Make sure a composition is open in After Effects.";
         }
 
-        // Determine export range: Work Area if set, else full comp duration
+        var isSelected = (scopeMode === "selected");
+        var isWorkArea = (scopeMode === "workarea");
+
         var exportStart = 0;
         var exportEnd = comp.duration;
 
-        if (comp.workAreaDuration && comp.workAreaDuration > 0 && comp.workAreaDuration < comp.duration) {
+        if (isWorkArea) {
             exportStart = parseFloat(comp.workAreaStart) || 0;
-            exportEnd = exportStart + parseFloat(comp.workAreaDuration);
+            exportEnd = exportStart + (parseFloat(comp.workAreaDuration) || comp.duration);
         }
 
         var clipsToProcess = [];
@@ -177,8 +262,25 @@ $._PPP_.exportAudio = function(targetWavPath) {
         var totalEnabledLayers = 0;
         var unresolvedMediaLayers = 0;
 
-        for (var i = 1; i <= comp.numLayers; i++) {
-            var layer = comp.layer(i);
+        var layerList = [];
+        if (isSelected) {
+            if (comp.selectedLayers && comp.selectedLayers.length > 0) {
+                for (var s = 0; s < comp.selectedLayers.length; s++) {
+                    layerList.push(comp.selectedLayers[s]);
+                }
+            }
+        } else {
+            for (var i = 1; i <= comp.numLayers; i++) {
+                layerList.push(comp.layer(i));
+            }
+        }
+
+        if (isSelected && layerList.length === 0) {
+            return "ERR|No layers currently selected in timeline. Please select one or more audio/video layers.";
+        }
+
+        for (var l = 0; l < layerList.length; l++) {
+            var layer = layerList[l];
             if (!layer || !layer.enabled) continue;
             totalEnabledLayers++;
 
@@ -216,30 +318,36 @@ $._PPP_.exportAudio = function(targetWavPath) {
                     clipEnd: lOut,
                     startTime: lStart,
                     hasAudio: checkLayerHasAudio(layer),
-                    clipName: layer.name || ("Layer_" + i),
-                    trackIndex: i
+                    clipName: layer.name || ("Layer_" + layer.index),
+                    trackIndex: layer.index
                 });
             }
         }
 
         if (clipsToProcess.length === 0) {
-            if (totalEnabledLayers > 0 && unresolvedMediaLayers > 0) {
+            if (isSelected) {
+                return "ERR|Selected layers do not contain valid audio or video media files.";
+            } else if (totalEnabledLayers > 0 && unresolvedMediaLayers > 0) {
                 return "ERR|Found audio/video layers but could not resolve media file path.";
             } else {
                 return "ERR|No audio or video layers found in active composition.";
             }
         }
 
-        // Filter audio-enabled layers if audio clips exist
-        var audioClips = [];
-        for (var a = 0; a < clipsToProcess.length; a++) {
-            if (clipsToProcess[a].hasAudio) audioClips.push(clipsToProcess[a]);
-        }
-        if (audioClips.length > 0) {
-            clipsToProcess = audioClips;
-        }
+        // Sort chronologically by sequence start
+        clipsToProcess.sort(function(a, b) {
+            return a.clipStart - b.clipStart;
+        });
 
-        if (exportEnd <= exportStart) {
+        if (isSelected) {
+            exportStart = clipsToProcess[0].clipStart;
+            exportEnd = clipsToProcess[clipsToProcess.length - 1].clipEnd;
+            for (var c = 0; c < clipsToProcess.length; c++) {
+                if (clipsToProcess[c].clipEnd > exportEnd) {
+                    exportEnd = clipsToProcess[c].clipEnd;
+                }
+            }
+        } else if (!isWorkArea) {
             exportStart = minLayerIn < 999999 ? minLayerIn : 0;
             exportEnd = maxLayerOut > 0 ? maxLayerOut : comp.duration;
         }
@@ -269,7 +377,7 @@ $._PPP_.exportAudio = function(targetWavPath) {
         }
 
         if (activeManifestClips.length === 0) {
-            return "ERR|No audio layers found within active comp work area.";
+            return "ERR|No audio layers found within active comp range.";
         }
 
         var tempDir = Folder.temp.fsName.replace(/\\/g, "/");
@@ -497,7 +605,7 @@ $._PPP_.importStyledSubtitles = function(jsonPath, importMethod, replaceExisting
         var words = payload.words || [];
 
         var isPrecomp = (importMethod === "precomp");
-        app.beginUndoGroup("Create Styled Subtitles - Caption Generator Pro");
+        app.beginUndoGroup("Create Subtitles - Caption Generator ULTRA");
 
         var targetComp = comp;
         if (isPrecomp) {
@@ -514,10 +622,9 @@ $._PPP_.importStyledSubtitles = function(jsonPath, importMethod, replaceExisting
             targetComp = precompItem;
         } else {
             if (replaceExisting) {
-                removeExistingSubtitleLayers(targetComp);
                 for (var r = targetComp.numLayers; r >= 1; r--) {
                     var rl = targetComp.layer(r);
-                    if (rl && rl.name && rl.name.indexOf("CGP_Caption_") === 0) {
+                    if (rl && (rl.comment === "CGP_SUBTITLE" || (rl.name && rl.name.indexOf("CGP_Caption_") === 0))) {
                         rl.remove();
                     }
                 }
@@ -527,7 +634,6 @@ $._PPP_.importStyledSubtitles = function(jsonPath, importMethod, replaceExisting
         var compWidth = targetComp.width;
         var compHeight = targetComp.height;
 
-        // Prefer payload.captions (which contains pre-chunked items from Stylize tab)
         var items = [];
         if (captions && captions.length > 0) {
             for (var c = 0; c < captions.length; c++) {
@@ -540,7 +646,7 @@ $._PPP_.importStyledSubtitles = function(jsonPath, importMethod, replaceExisting
         } else if (words && words.length > 0) {
             for (var w = 0; w < words.length; w++) {
                 items.push({
-                    text: words[w].word,
+                    text: words[w].word || words[w].text,
                     start: words[w].start,
                     end: words[w].end
                 });
@@ -553,16 +659,16 @@ $._PPP_.importStyledSubtitles = function(jsonPath, importMethod, replaceExisting
         }
 
         var primaryRgb = hexToRgb(style.textColor || style.primaryColor || "#FFFFFF");
-        var highlightRgb = hexToRgb(style.highlightColor || "#FFD700");
         var strokeRgb = hexToRgb(style.strokeColor || "#000000");
 
         var posVert = style.position || "bottom";
         var alignHoriz = style.align || "center";
 
         var posY = (posVert === "top") ? (compHeight * 0.15) : ((posVert === "center") ? (compHeight * 0.5) : (compHeight * 0.85));
-        var posX = (alignHoriz === "left") ? (compWidth * 0.2) : ((alignHoriz === "right") ? (compWidth * 0.8) : (compWidth * 0.5));
+        var posX = (alignHoriz === "left") ? (compWidth * 0.15) : ((alignHoriz === "right") ? (compWidth * 0.85) : (compWidth * 0.5));
 
-        var baseFontSize = style.fontSize ? (compHeight * (style.fontSize / 550.0)) : (compHeight * 0.05);
+        var fontSizePx = style.fontSize ? parseFloat(style.fontSize) : 48;
+        if (isNaN(fontSizePx) || fontSizePx < 8) fontSizePx = 48;
 
         for (var i = 0; i < items.length; i++) {
             var item = items[i];
@@ -578,13 +684,13 @@ $._PPP_.importStyledSubtitles = function(jsonPath, importMethod, replaceExisting
             var textProp = textLayer.property("Source Text");
             var textDocument = textProp.value;
 
-            textDocument.fontSize = baseFontSize;
-            textDocument.fillColor = (style.animation === "karaoke" ? highlightRgb : primaryRgb);
+            textDocument.fontSize = fontSizePx;
+            textDocument.fillColor = primaryRgb;
             textDocument.applyFill = true;
 
             if (style.enableStroke !== false) {
                 textDocument.strokeColor = strokeRgb;
-                textDocument.strokeWidth = compHeight * 0.004;
+                textDocument.strokeWidth = Math.max(1, Math.round(fontSizePx * 0.06));
                 textDocument.applyStroke = true;
             } else {
                 textDocument.applyStroke = false;
@@ -608,42 +714,11 @@ $._PPP_.importStyledSubtitles = function(jsonPath, importMethod, replaceExisting
 
             textLayer.property("Anchor Point").setValue([anchorX, anchorY]);
             textLayer.property("Position").setValue([posX, posY]);
-
-            // Apply Animations
-            var anim = style.animation || "pop_in";
-            if (anim === "pop_in" || anim === "pop" || anim === "word_kinetic") {
-                var scaleProp = textLayer.property("Scale");
-                scaleProp.setValueAtTime(item.start, [0, 0]);
-                scaleProp.setValueAtTime(item.start + 0.08, [125, 125]);
-                scaleProp.setValueAtTime(item.start + 0.15, [100, 100]);
-            } else if (anim === "karaoke_highlight" || anim === "karaoke" || anim === "highlight") {
-                var scaleK = textLayer.property("Scale");
-                scaleK.setValueAtTime(item.start, [100, 100]);
-                scaleK.setValueAtTime(item.start + 0.06, [118, 118]);
-                scaleK.setValueAtTime(item.start + 0.14, [100, 100]);
-            } else if (anim === "clean_fade" || anim === "fade") {
-                var opacClean = textLayer.property("Opacity");
-                opacClean.setValueAtTime(item.start, 0);
-                opacClean.setValueAtTime(item.start + 0.15, 100);
-                opacClean.setValueAtTime(item.end - 0.15, 100);
-                opacClean.setValueAtTime(item.end, 0);
-            } else if (anim === "lower_third_soft" || anim === "podcast") {
-                var opacPod = textLayer.property("Opacity");
-                opacPod.setValueAtTime(item.start, 0);
-                opacPod.setValueAtTime(item.start + 0.25, 100);
-                opacPod.setValueAtTime(item.end - 0.25, 100);
-                opacPod.setValueAtTime(item.end, 0);
-
-                var scalePod = textLayer.property("Scale");
-                scalePod.setValueAtTime(item.start, [94, 94]);
-                scalePod.setValueAtTime(item.start + 0.3, [100, 100]);
-            }
         }
 
         app.endUndoGroup();
 
-        var styleInfo = "Preset: " + (style.animation || "pop_in") + ", Words: " + (style.wordsPerLayer || "full");
-        return "OK|Created " + items.length + " styled text layers in active comp (" + styleInfo + ")!|Count:" + items.length;
+        return "OK|Created " + items.length + " caption text layers in active comp!|Count:" + items.length;
 
     } catch (e) {
         return "ERR|" + e.toString();

@@ -93,8 +93,8 @@ var SettingsManager = {
             left.style.cssText = "display: flex; align-items: center; gap: 6px;";
 
             var icon = document.createElement("span");
-            icon.style.cssText = `font-weight: 700; font-size: 12px; color: ${item.ok ? 'var(--accent-blue)' : '#ff4d4d'};`;
-            icon.innerText = item.ok ? "✔" : "✖";
+            icon.style.cssText = `font-weight: 700; font-size: 10px; color: ${item.ok ? 'var(--success)' : 'var(--danger)'};`;
+            icon.innerText = item.ok ? "[OK]" : "[MISSING]";
 
             var name = document.createElement("span");
             name.style.cssText = "font-weight: 600; color: var(--text-primary); font-size: 11px;";
