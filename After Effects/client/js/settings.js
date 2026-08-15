@@ -1,7 +1,7 @@
-// Settings & Model Manager
+// Settings & Model Manager for After Effects ULTRA
 var SettingsManager = {
     settings: {
-        hardware: "auto"
+        hardware: "cuda"
     },
 
     init: function() {
@@ -20,18 +20,24 @@ var SettingsManager = {
         this.load();
         this.initLicenseSection();
         this.renderModelManager();
+        this.updateModelPathDisplay();
+    },
 
-        // Update model storage path display to canonical %USERPROFILE%\.cache\whisper
+    updateModelPathDisplay: function() {
         var lblPath = document.getElementById("lblModelPath");
-        if (lblPath && typeof require !== "undefined") {
+        if (!lblPath) return;
+
+        if (typeof require !== "undefined") {
             try {
                 var os = require("os");
                 var path = require("path");
                 var userProfile = process.env.USERPROFILE || os.homedir();
                 var cacheDir = path.join(userProfile, ".cache", "whisper").replace(/\\/g, "/");
                 lblPath.innerText = cacheDir;
+                return;
             } catch(e) {}
         }
+        lblPath.innerText = "~/.cache/whisper";
     },
 
     load: function() {
@@ -55,6 +61,7 @@ var SettingsManager = {
         var container = document.getElementById("requirementsListContainer");
         if (!container) return;
 
+        status = status || {};
         container.innerHTML = "";
 
         var items = [
@@ -87,13 +94,13 @@ var SettingsManager = {
 
         items.forEach(function(item) {
             var row = document.createElement("div");
-            row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: var(--bg-dark); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 4px;";
+            row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: var(--surface-elevated); border: 1px solid var(--border); padding: 5px 8px; border-radius: 4px;";
 
             var left = document.createElement("div");
             left.style.cssText = "display: flex; align-items: center; gap: 6px;";
 
             var icon = document.createElement("span");
-            icon.style.cssText = `font-weight: 700; font-size: 10px; color: ${item.ok ? 'var(--success)' : 'var(--danger)'};`;
+            icon.style.cssText = `font-weight: 700; font-size: 10px; color: ${item.ok ? 'var(--success)' : 'var(--danger)'}; font-family: monospace;`;
             icon.innerText = item.ok ? "[OK]" : "[MISSING]";
 
             var name = document.createElement("span");
@@ -104,7 +111,7 @@ var SettingsManager = {
             left.appendChild(name);
 
             var right = document.createElement("span");
-            right.style.cssText = `font-size: 10px; color: ${item.ok ? 'var(--text-secondary)' : '#ff4d4d'}; font-family: monospace;`;
+            right.style.cssText = `font-size: 10px; color: ${item.ok ? 'var(--text-secondary)' : 'var(--danger)'}; font-family: monospace;`;
             right.innerText = item.info;
 
             row.appendChild(left);
@@ -117,18 +124,25 @@ var SettingsManager = {
         var container = document.getElementById("modelListContainer");
         if (!container) return;
 
-        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 10px;">Checking dependencies and models...</div>';
+        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 10px; font-size: 11px;">Checking dependencies and speech models...</div>';
 
         var self = this;
         DependencyInstaller.checkStatus(function(status) {
             self.renderRequirementsList(status);
+            self.updateModelPathDisplay();
 
             container.innerHTML = "";
-            var models = status.models_detailed || [];
+            var models = (status && status.models_detailed) ? status.models_detailed : [];
 
             if (models.length === 0) {
-                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 10px;">No models detected.</div>';
-                return;
+                // Fallback default list if detailed models were empty
+                models = [
+                    { key: "tiny", name: "Tiny", size: "75 MB", desc: "Fastest execution, lower accuracy.", installed: (status && status.installed_models && status.installed_models.indexOf("tiny") !== -1) },
+                    { key: "base", name: "Base", size: "145 MB", desc: "Fast and standard accuracy. Recommended.", installed: (status && status.installed_models && status.installed_models.indexOf("base") !== -1) },
+                    { key: "small", name: "Small", size: "480 MB", desc: "Balanced speed and accuracy.", installed: (status && status.installed_models && status.installed_models.indexOf("small") !== -1) },
+                    { key: "medium", name: "Medium", size: "1.5 GB", desc: "High accuracy for complex audio.", installed: (status && status.installed_models && status.installed_models.indexOf("medium") !== -1) },
+                    { key: "large-v3", name: "Large-v3", size: "3.0 GB", desc: "Maximum accuracy across languages.", installed: (status && status.installed_models && status.installed_models.indexOf("large-v3") !== -1) }
+                ];
             }
 
             models.forEach(function(model) {
@@ -166,7 +180,7 @@ var SettingsManager = {
                                 self.renderModelManager();
                                 if (typeof updateModelDropdown === "function") {
                                     DependencyInstaller.checkStatus(function(st) {
-                                        updateModelDropdown(st.installed_models);
+                                        if (st && st.installed_models) updateModelDropdown(st.installed_models);
                                     });
                                 }
                             });
@@ -178,7 +192,9 @@ var SettingsManager = {
                     btnDownload.className = "btn-secondary";
                     btnDownload.innerText = "Download Model";
                     btnDownload.addEventListener("click", function() {
-                        showInstallerModalForModel(model.key);
+                        if (typeof showInstallerModalForModel === "function") {
+                            showInstallerModalForModel(model.key);
+                        }
                     });
                     actionsRow.appendChild(btnDownload);
                 }
@@ -214,7 +230,7 @@ var SettingsManager = {
                 var key = inputKey ? inputKey.value.trim() : "";
                 if (!key) {
                     lblStatus.innerText = "Please enter a license key.";
-                    lblStatus.style.color = "#ff4d4d";
+                    lblStatus.style.color = "var(--danger)";
                     return;
                 }
 
@@ -226,13 +242,13 @@ var SettingsManager = {
                     btnActivate.disabled = false;
                     if (valid) {
                         lblStatus.innerText = "Activated";
-                        lblStatus.style.color = "var(--accent-blue)";
+                        lblStatus.style.color = "var(--accent)";
                         if (typeof showAlertModal === "function") {
                             showAlertModal("License Activated", "Your license key has been successfully activated on this computer!");
                         }
                     } else {
                         lblStatus.innerText = message || "Invalid / already used on another computer";
-                        lblStatus.style.color = "#ff4d4d";
+                        lblStatus.style.color = "var(--danger)";
                         if (typeof showAlertModal === "function") {
                             showAlertModal("License Notice", message || "License activation failed.");
                         }
@@ -285,14 +301,14 @@ var SettingsManager = {
             if (valid) {
                 if (data && data.isOffline) {
                     lblStatus.innerText = "Activated (Offline Mode)";
-                    lblStatus.style.color = "#e6a23c";
+                    lblStatus.style.color = "var(--warning)";
                 } else {
                     lblStatus.innerText = "Activated";
-                    lblStatus.style.color = "var(--accent-blue)";
+                    lblStatus.style.color = "var(--accent)";
                 }
             } else {
                 lblStatus.innerText = message || "Not activated";
-                lblStatus.style.color = "#ff4d4d";
+                lblStatus.style.color = "var(--danger)";
             }
         });
     }

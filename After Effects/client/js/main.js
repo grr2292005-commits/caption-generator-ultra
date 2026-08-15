@@ -405,7 +405,8 @@ var ActiveCompState = {
     workDur: 0,
     hasComp: false,
     selectedLayersCount: 0,
-    selectedLayersDuration: 0
+    selectedLayersDuration: 0,
+    selectedLayersNames: ""
 };
 
 function pollActiveCompInfo() {
@@ -477,8 +478,11 @@ function updateScopeUI() {
         ExtendScriptBridge.getSelectedLayersInfo(function(selRes) {
             var count = (selRes && selRes.selectedCount) ? selRes.selectedCount : 0;
             var dur = (selRes && selRes.totalDuration) ? selRes.totalDuration : 0;
+            var names = (selRes && selRes.layers) ? selRes.layers.map(function(l) { return l.name; }).join(", ") : "";
+
             ActiveCompState.selectedLayersCount = count;
             ActiveCompState.selectedLayersDuration = dur;
+            ActiveCompState.selectedLayersNames = names;
 
             if (count === 0) {
                 if (statusText) statusText.innerText = "No audio/video layers selected in timeline.";
@@ -488,11 +492,11 @@ function updateScopeUI() {
                     btn.innerText = "Select Layer(s) in Timeline";
                 }
             } else {
-                if (statusText) statusText.innerText = "Scope: Selected Layers (" + count + " selected, " + dur.toFixed(1) + "s total)";
+                if (statusText) statusText.innerText = "Scope: Selected Layers (" + count + " selected: " + names + " - " + dur.toFixed(1) + "s total)";
                 if (notice) notice.style.display = "none";
                 if (btn) {
                     btn.disabled = false;
-                    btn.innerText = "Transcribe Selected Layers";
+                    btn.innerText = "Transcribe Selected Layers (" + count + ")";
                 }
             }
         });
@@ -668,8 +672,15 @@ document.addEventListener("DOMContentLoaded", function() {
             document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
 
             tab.classList.add("active");
-            var target = document.getElementById(tab.getAttribute("data-tab"));
+            var targetId = tab.getAttribute("data-tab");
+            var target = document.getElementById(targetId);
             if (target) target.classList.add("active");
+
+            // Refresh settings whenever user enters Settings tab
+            if (targetId === "tab-settings" && typeof SettingsManager !== "undefined") {
+                SettingsManager.checkLicenseStatus();
+                SettingsManager.renderModelManager();
+            }
         });
     });
 
@@ -680,7 +691,12 @@ document.addEventListener("DOMContentLoaded", function() {
     var savedPrefs = UserPreferences.load();
     UserPreferences.restore(savedPrefs);
 
-    // 4. Bind Form Sliders & Controls
+    // 4. Initialize Settings Manager
+    if (typeof SettingsManager !== "undefined") {
+        SettingsManager.init();
+    }
+
+    // 5. Bind Form Sliders & Controls
     var sliderChars = document.getElementById("sliderMaxChars");
     if (sliderChars) {
         sliderChars.addEventListener("input", function() {
@@ -738,7 +754,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // 5. Transcript Search & Filter Controls
+    // 6. Transcript Search & Filter Controls
     var searchInput = document.getElementById("transcriptSearchInput");
     var btnClearSearch = document.getElementById("btnClearSearch");
     var btnMatchCase = document.getElementById("btnMatchCase");
@@ -844,7 +860,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // 6. Action Buttons
+    // 7. Action Buttons
     var btnTranscribe = document.getElementById("btnTranscribe");
     var btnCancelTranscribe = document.getElementById("btnCancelTranscribe");
     var btnApplyEdits = document.getElementById("btnApplyEdits");
@@ -874,7 +890,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // 7. Modals
+    // 8. Modals
     var btnModalCancel = document.getElementById("btnModalCancel");
     var btnModalClose = document.getElementById("btnModalClose");
     if (btnModalCancel) {
@@ -893,7 +909,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // 8. Background Check & Model Dropdown
+    // 9. Background Check & Model Dropdown
     DependencyInstaller.checkStatus(function(status) {
         if (status && status.installed_models) {
             updateModelDropdown(status.installed_models);
@@ -903,7 +919,7 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     });
 
-    // 9. Active Composition Polling Loop
+    // 10. Active Composition Polling Loop
     pollActiveCompInfo();
     setInterval(pollActiveCompInfo, 2500);
 });
@@ -940,6 +956,67 @@ function updateModelDropdown(installedModels) {
     } else {
         select.value = "base";
     }
+}
+
+function showInstallerModalForModel(modelKey) {
+    var modal = document.getElementById("installerModal");
+    var title = document.getElementById("installerModalTitle");
+    var statusLog = document.getElementById("statusLog");
+    var statusMetrics = document.getElementById("statusMetrics");
+    var fill = document.getElementById("progressFill");
+    var cancelBtn = document.getElementById("btnModalCancel");
+    var closeBtn = document.getElementById("btnModalClose");
+
+    if (!modal) return;
+
+    if (title) title.innerText = "Downloading " + modelKey.toUpperCase() + " Speech Model";
+    modal.style.display = "flex";
+    fill.style.width = "0%";
+    statusLog.innerText = "Connecting to server...";
+    if (statusMetrics) {
+        statusMetrics.style.display = "none";
+        statusMetrics.innerText = "";
+    }
+    cancelBtn.style.display = "inline-block";
+    closeBtn.style.display = "none";
+
+    DependencyInstaller.installModel(modelKey,
+        function (percent, msg) {
+            fill.style.width = percent + "%";
+
+            if (msg && msg.indexOf(" | Speed:") !== -1) {
+                var parts = msg.split(" | ");
+                statusLog.innerText = "Downloading file: " + parts[0];
+                if (statusMetrics) {
+                    statusMetrics.style.display = "block";
+                    statusMetrics.innerText = parts[1] + "  |  " + parts[2];
+                }
+            } else {
+                statusLog.innerText = msg;
+                if (statusMetrics) statusMetrics.style.display = "none";
+            }
+        },
+        function (err, res) {
+            cancelBtn.style.display = "none";
+            closeBtn.style.display = "inline-block";
+            if (err) {
+                statusLog.innerText = "Download error: " + err;
+                if (statusMetrics) statusMetrics.style.display = "none";
+            } else {
+                statusLog.innerText = "Model installed successfully!";
+                if (statusMetrics) statusMetrics.style.display = "none";
+                fill.style.width = "100%";
+                DependencyInstaller.checkStatus(function (status) {
+                    if (status && status.installed_models) {
+                        updateModelDropdown(status.installed_models);
+                    }
+                    if (SettingsManager) {
+                        SettingsManager.renderModelManager();
+                    }
+                });
+            }
+        }
+    );
 }
 
 function ensureLicensedAction(actionName, callback) {
@@ -1000,6 +1077,14 @@ function runTranscribeWorkflow() {
 
         if (!btn || btn.disabled) return;
 
+        var selScope = document.getElementById("selectTranscribeScope");
+        var scopeMode = selScope ? selScope.value : "full";
+
+        if (scopeMode === "selected" && ActiveCompState.selectedLayersCount === 0) {
+            showAlertModal("No Layers Selected", "Please select one or more audio/video layers in the After Effects timeline before transcribing.");
+            return;
+        }
+
         isTranscriptionCancelled = false;
         var originalText = btn.innerText;
         btn.disabled = true;
@@ -1041,9 +1126,6 @@ function runTranscribeWorkflow() {
             if (statusLog) statusLog.innerText = "Extracting composition audio...";
             if (progFill) progFill.style.width = "20%";
             if (progPct) progPct.innerText = "20%";
-
-            var selScope = document.getElementById("selectTranscribeScope");
-            var scopeMode = selScope ? selScope.value : "full";
 
             ExtendScriptBridge.getProjectDetails(function(projectDetails) {
                 if (isTranscriptionCancelled) return;

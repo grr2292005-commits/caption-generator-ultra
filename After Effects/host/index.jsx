@@ -81,16 +81,37 @@ $._PPP_.getProjectDetails = function() {
     }
 };
 
+function resolveFilePath(f) {
+    if (!f) return "";
+    try {
+        if (f.fsName && f.fsName.length > 0) return f.fsName.replace(/\\/g, "/");
+        if (f.fullName && f.fullName.length > 0) return f.fullName.replace(/\\/g, "/");
+        if (f.absoluteURI && f.absoluteURI.length > 0) {
+            return decodeURIComponent(f.absoluteURI).replace(/^file:\/\/\//i, "").replace(/^file:\/\//i, "").replace(/\\/g, "/");
+        }
+    } catch(e) {}
+    return "";
+}
+
 function getLayerSourceFile(layer) {
     if (!layer) return null;
     try {
         if (layer.source) {
             var src = layer.source;
-            if (src && src.mainSource && src.mainSource.file) {
+            if (src.mainSource && src.mainSource.file) {
                 return src.mainSource.file;
             }
-            if (src && src.file) {
+            if (src.file) {
                 return src.file;
+            }
+            if (src.typeName === "Composition" || (typeof CompItem !== "undefined" && src instanceof CompItem)) {
+                for (var p = 1; p <= src.numLayers; p++) {
+                    var pl = src.layer(p);
+                    if (pl && pl.enabled && pl.source) {
+                        if (pl.source.mainSource && pl.source.mainSource.file) return pl.source.mainSource.file;
+                        if (pl.source.file) return pl.source.file;
+                    }
+                }
             }
         }
     } catch (e) {}
@@ -115,6 +136,29 @@ function checkLayerHasAudio(layer) {
         }
     } catch (e) {}
     return true;
+}
+
+function getCompSelectedLayers(comp) {
+    var list = [];
+    if (!comp) return list;
+    try {
+        if (comp.selectedLayers && comp.selectedLayers.length > 0) {
+            for (var s = 0; s < comp.selectedLayers.length; s++) {
+                if (comp.selectedLayers[s]) list.push(comp.selectedLayers[s]);
+            }
+        }
+    } catch(e1) {}
+    if (list.length === 0 && comp.numLayers > 0) {
+        try {
+            for (var i = 1; i <= comp.numLayers; i++) {
+                var lyr = comp.layer(i);
+                if (lyr && lyr.selected) {
+                    list.push(lyr);
+                }
+            }
+        } catch(e2) {}
+    }
+    return list;
 }
 
 function getActiveComp() {
@@ -181,39 +225,38 @@ $._PPP_.getSelectedLayersInfo = function() {
             return "ERR|No active composition found.";
         }
 
+        var rawSelected = getCompSelectedLayers(comp);
         var selectedLayers = [];
-        var seenMedia = {};
+        var seenIndices = {};
 
-        if (comp.selectedLayers && comp.selectedLayers.length > 0) {
-            for (var i = 0; i < comp.selectedLayers.length; i++) {
-                var layer = comp.selectedLayers[i];
-                if (!layer || !layer.enabled) continue;
+        for (var i = 0; i < rawSelected.length; i++) {
+            var layer = rawSelected[i];
+            if (!layer) continue;
 
-                var f = getLayerSourceFile(layer);
-                if (!f) continue;
+            var f = getLayerSourceFile(layer);
+            var filePath = resolveFilePath(f);
+            if (!filePath) continue;
 
-                var filePath = f.fsName ? f.fsName.replace(/\\/g, "/") : (f.fullName ? f.fullName.replace(/\\/g, "/") : "");
-                if (!filePath) continue;
+            var lIn = parseFloat(layer.inPoint) || 0;
+            var lOut = parseFloat(layer.outPoint) || (parseFloat(layer.inPoint) + 0.1);
+            var dur = lOut - lIn;
+            if (dur <= 0) {
+                dur = parseFloat(comp.duration) || 1.0;
+                lOut = lIn + dur;
+            }
 
-                var lIn = parseFloat(layer.inPoint) || 0;
-                var lOut = parseFloat(layer.outPoint) || 0;
-                var dur = lOut - lIn;
-
-                if (dur > 0.05) {
-                    var key = Math.round(lIn * 100) + "_" + Math.round(lOut * 100);
-                    if (!seenMedia[key]) {
-                        seenMedia[key] = true;
-                        selectedLayers.push({
-                            index: layer.index,
-                            name: layer.name || ("Layer_" + layer.index),
-                            start: Math.round(lIn * 1000) / 1000,
-                            end: Math.round(lOut * 1000) / 1000,
-                            duration: Math.round(dur * 1000) / 1000,
-                            hasAudio: checkLayerHasAudio(layer),
-                            mediaPath: filePath
-                        });
-                    }
-                }
+            var idx = layer.index || (i + 1);
+            if (!seenIndices[idx]) {
+                seenIndices[idx] = true;
+                selectedLayers.push({
+                    index: idx,
+                    name: layer.name || ("Layer_" + idx),
+                    start: Math.round(lIn * 1000) / 1000,
+                    end: Math.round(lOut * 1000) / 1000,
+                    duration: Math.round(dur * 1000) / 1000,
+                    hasAudio: checkLayerHasAudio(layer),
+                    mediaPath: filePath
+                });
             }
         }
 
@@ -227,6 +270,7 @@ $._PPP_.getSelectedLayersInfo = function() {
         }
 
         var resObj = {
+            totalSelectedLayers: rawSelected.length,
             selectedCount: selectedLayers.length,
             totalDuration: Math.round(totalDur * 1000) / 1000,
             layers: selectedLayers
@@ -264,11 +308,7 @@ $._PPP_.exportAudio = function(targetWavPath, scopeMode) {
 
         var layerList = [];
         if (isSelected) {
-            if (comp.selectedLayers && comp.selectedLayers.length > 0) {
-                for (var s = 0; s < comp.selectedLayers.length; s++) {
-                    layerList.push(comp.selectedLayers[s]);
-                }
-            }
+            layerList = getCompSelectedLayers(comp);
         } else {
             for (var i = 1; i <= comp.numLayers; i++) {
                 layerList.push(comp.layer(i));
@@ -281,24 +321,11 @@ $._PPP_.exportAudio = function(targetWavPath, scopeMode) {
 
         for (var l = 0; l < layerList.length; l++) {
             var layer = layerList[l];
-            if (!layer || !layer.enabled) continue;
+            if (!layer) continue;
             totalEnabledLayers++;
 
             var f = getLayerSourceFile(layer);
-            if (!f) {
-                unresolvedMediaLayers++;
-                continue;
-            }
-
-            var filePath = "";
-            if (f.fsName) {
-                filePath = f.fsName.replace(/\\/g, "/");
-            } else if (f.fullName) {
-                filePath = f.fullName.replace(/\\/g, "/");
-            } else if (f.absoluteURI) {
-                filePath = decodeURIComponent(f.absoluteURI).replace(/file:\/\/\//g, "").replace(/\\/g, "/");
-            }
-
+            var filePath = resolveFilePath(f);
             if (!filePath) {
                 unresolvedMediaLayers++;
                 continue;
