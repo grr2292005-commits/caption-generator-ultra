@@ -1,6 +1,37 @@
-// Caption Generator Pro - Host Script
+// Caption Generator ULTRA - Host Script
 if (typeof $._PPP_ === "undefined") {
     $._PPP_ = {};
+}
+
+function parseJsonSafe(str) {
+    if (!str || typeof str !== "string") return null;
+    var trimmed = str.replace(/^\s+|\s+$/g, "");
+    if (trimmed.length === 0) return null;
+
+    if (typeof JSON !== "undefined" && JSON && typeof JSON.parse === "function") {
+        try {
+            return JSON.parse(trimmed);
+        } catch(eJson) {}
+    }
+
+    var rx_one = /^[\],:{}\s]*$/;
+    var rx_two = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
+    var rx_three = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
+    var rx_four = /(?:^|:|,)(?:\s*\[)+/g;
+
+    var sanitized = trimmed
+        .replace(rx_two, "@")
+        .replace(rx_three, "]")
+        .replace(rx_four, "");
+
+    if (rx_one.test(sanitized)) {
+        try {
+            return eval("(" + trimmed + ")");
+        } catch(eEval) {
+            return null;
+        }
+    }
+    return null;
 }
 
 $._PPP_.testConnection = function() {
@@ -90,15 +121,13 @@ $._PPP_.rippleDeleteRanges = function(rangesJson) {
             }
         }
 
-        var rawList = [];
-        try {
-            rawList = eval("(" + rangesJson + ")");
-        } catch (eParse) {
-            return "ERR|Failed to parse cut ranges payload: " + eParse.toString();
+        var rawList = parseJsonSafe(rangesJson);
+        if (!rawList || !(rawList instanceof Array)) {
+            return "ERR|Failed to parse cut ranges payload. Expected a valid JSON array.";
         }
 
-        if (!rawList || rawList.length === 0) {
-            return "ERR|No cut ranges provided.";
+        if (rawList.length === 0) {
+            return "ERR|No cut ranges provided for timeline ripple edit.";
         }
 
         // Calculate sequence FPS for timecode conversions
@@ -415,15 +444,20 @@ $._PPP_.getSelectedClipsInfo = function() {
                     if (!item) continue;
                     if (isTrackItemSelected(item)) {
                         var mp = (item.projectItem && item.projectItem.getMediaPath) ? item.projectItem.getMediaPath() : "";
+                        if (!mp || mp.length === 0) continue;
+
+                        var f = new File(mp);
+                        if (!f.exists) continue;
+
                         var cStart = item.start ? parseFloat(item.start.seconds) : 0;
                         var cEnd = item.end ? parseFloat(item.end.seconds) : 0;
                         var cIn = item.inPoint ? parseFloat(item.inPoint.seconds) : 0;
                         var dur = cEnd - cStart;
 
                         if (dur > 0.05) {
-                            var key = typePrefix + "_" + Math.round(cStart * 100) + "_" + Math.round(cEnd * 100);
-                            if (!seenMediaMap[key]) {
-                                seenMediaMap[key] = true;
+                            var timeKey = Math.round(cStart * 100) + "_" + Math.round(cEnd * 100);
+                            if (!seenMediaMap[timeKey]) {
+                                seenMediaMap[timeKey] = true;
                                 selectedClips.push({
                                     trackName: typePrefix + (t + 1),
                                     trackIndex: t,
@@ -853,14 +887,10 @@ $._PPP_.importStyledSubtitles = function(jsonPath) {
         var jsonText = jsonFile.read();
         jsonFile.close();
 
-        var payload = null;
-        try {
-            payload = eval("(" + jsonText + ")");
-        } catch(eJson) {
-            return "ERR|Failed to parse styled subtitle JSON payload: " + eJson.toString();
+        var payload = parseJsonSafe(jsonText);
+        if (!payload) {
+            return "ERR|Failed to parse styled subtitle JSON payload. Expected valid JSON.";
         }
-
-        if (!payload) return "ERR|Empty styled subtitle payload.";
 
         var style = payload.style || {};
         var captions = payload.captions || [];

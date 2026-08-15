@@ -738,14 +738,6 @@ button {
     border-color: rgba(245, 158, 11, 0.35);
 }
 
-.speaker-filter-select {
-    padding: 2px 20px 2px 6px;
-    font-size: 10px;
-    border-radius: 4px;
-    height: 22px;
-    background-color: var(--surface-elevated);
-}
-
 /* Transcript Body & Paragraphs */
 .transcript-body {
     padding: 12px;

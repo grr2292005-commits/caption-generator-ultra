@@ -539,42 +539,7 @@ document.addEventListener("DOMContentLoaded", function () {
             this.words = normalizedWords;
             if (this.words.length === 0) return;
 
-            // Extract distinct speakers and populate speaker filter dropdown
-            var speakersFound = {};
-            for (var sIdx = 0; sIdx < normalizedWords.length; sIdx++) {
-                var spk = normalizedWords[sIdx].speaker || "Speaker 1";
-                speakersFound[spk] = true;
-            }
-            var speakerList = Object.keys(speakersFound);
-            this.populateSpeakerFilter(speakerList);
-
             this.rebuildParagraphs();
-        },
-
-        populateSpeakerFilter: function(speakerList) {
-            var sel = document.getElementById("selectSpeakerFilter");
-            if (!sel) return;
-
-            sel.innerHTML = "";
-            var optAll = document.createElement("option");
-            optAll.value = "all";
-            optAll.innerText = "All Speakers";
-            sel.appendChild(optAll);
-
-            if (speakerList && speakerList.length > 0) {
-                for (var i = 0; i < speakerList.length; i++) {
-                    var opt = document.createElement("option");
-                    opt.value = speakerList[i];
-                    opt.innerText = speakerList[i];
-                    sel.appendChild(opt);
-                }
-                sel.disabled = false;
-            } else {
-                sel.disabled = true;
-            }
-
-            this.selectedSpeaker = "all";
-            sel.value = "all";
         },
 
         rebuildParagraphs: function() {
@@ -807,11 +772,6 @@ document.addEventListener("DOMContentLoaded", function () {
                         // Check visibility filters
                         if (isFil && !self.showFillers) continue;
                         if (isCen && !self.showCensored) continue;
-                        if (self.selectedSpeaker && self.selectedSpeaker !== "all") {
-                            var tSpk = (token.speaker || "Speaker 1").trim().toLowerCase();
-                            var sSpk = (self.selectedSpeaker || "").trim().toLowerCase();
-                            if (tSpk !== sSpk) continue;
-                        }
 
                         var wordSpan = document.createElement("span");
                         wordSpan.className = "transcript-word";
@@ -1560,13 +1520,6 @@ document.addEventListener("DOMContentLoaded", function () {
                         if (pillFillers) pillFillers.classList.remove("active", "active-filler");
                         if (pillCensored) pillCensored.classList.remove("active", "active-censored");
                     }
-                    self.render();
-                });
-            }
-
-            if (selectSpeaker) {
-                selectSpeaker.addEventListener("change", function() {
-                    self.selectedSpeaker = selectSpeaker.value;
                     self.render();
                 });
             }
