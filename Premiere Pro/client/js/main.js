@@ -1085,6 +1085,20 @@ document.addEventListener("DOMContentLoaded", function () {
         },
 
         syncCaptionsModel: function() {
+            var sChars = document.getElementById("sliderMaxChars");
+            var maxChars = sChars ? parseInt(sChars.value, 10) : 37;
+            if (isNaN(maxChars) || maxChars < 10) maxChars = 37;
+
+            var sDur = document.getElementById("sliderMaxDur");
+            var maxDur = sDur ? (parseFloat(sDur.value) / 10.0) : 3.0;
+            if (isNaN(maxDur) || maxDur <= 0) maxDur = 3.0;
+
+            var sGap = document.getElementById("sliderGapFrames");
+            var gapSec = sGap ? (parseInt(sGap.value, 10) / 30.0) : 0.0;
+
+            var lineModeRadio = document.querySelector('input[name="lineMode"]:checked');
+            var isDouble = lineModeRadio ? (lineModeRadio.value === "double") : true;
+
             var captions = [];
             var curCue = null;
             for (var i = 0; i < this.words.length; i++) {
@@ -1093,7 +1107,11 @@ document.addEventListener("DOMContentLoaded", function () {
                     curCue = { start: w.start, end: w.end, text: w.text };
                 } else {
                     var gap = w.start - curCue.end;
-                    if (curCue.text.length + w.text.length > 37 || gap > 0.8) {
+                    var cueDur = w.end - curCue.start;
+                    var newLen = curCue.text.length + 1 + w.text.length;
+                    var limit = isDouble ? (maxChars * 2) : maxChars;
+
+                    if (newLen > limit || cueDur > maxDur || gap > Math.max(0.6, gapSec + 0.05)) {
                         captions.push(curCue);
                         curCue = { start: w.start, end: w.end, text: w.text };
                     } else {
@@ -1743,8 +1761,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (lblStatus) lblStatus.innerText = "Transcribing";
                 if (lblBadge) {
                     lblBadge.innerText = "Transcribing";
-                    lblBadge.style.background = "#0d6efd";
-                    lblBadge.style.color = "#fff";
+                    lblBadge.className = "badge-status transcribing";
                 }
                 if (btnTranscribe) {
                     btnTranscribe.disabled = true;
@@ -1762,8 +1779,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (lblStatus) lblStatus.innerText = "No Sequence";
                 if (lblBadge) {
                     lblBadge.innerText = "No Sequence";
-                    lblBadge.style.background = "rgba(255, 255, 255, 0.08)";
-                    lblBadge.style.color = "var(--text-secondary)";
+                    lblBadge.className = "badge-status no-sequence";
                 }
                 if (btnTranscribe) {
                     btnTranscribe.disabled = true;
@@ -1798,8 +1814,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (lblStatus) lblStatus.innerText = "No Media";
                 if (lblBadge) {
                     lblBadge.innerText = "No Media";
-                    lblBadge.style.background = "rgba(255, 255, 255, 0.08)";
-                    lblBadge.style.color = "var(--text-secondary)";
+                    lblBadge.className = "badge-status no-sequence";
                 }
                 if (btnTranscribe) {
                     btnTranscribe.disabled = true;
@@ -1810,8 +1825,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (lblStatus) lblStatus.innerText = "Transcribed";
                 if (lblBadge) {
                     lblBadge.innerText = "Transcribed";
-                    lblBadge.style.background = "rgba(40, 167, 69, 0.2)";
-                    lblBadge.style.color = "#28a745";
+                    lblBadge.className = "badge-status transcribed";
                 }
                 if (btnTranscribe) {
                     btnTranscribe.disabled = false;
@@ -1822,8 +1836,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (lblStatus) lblStatus.innerText = "Untranscribed";
                 if (lblBadge) {
                     lblBadge.innerText = "Untranscribed";
-                    lblBadge.style.background = "rgba(255, 193, 7, 0.2)";
-                    lblBadge.style.color = "#ffc107";
+                    lblBadge.className = "badge-status untranscribed";
                 }
                 if (btnTranscribe) {
                     btnTranscribe.disabled = false;
@@ -2000,6 +2013,18 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
+    var btnRefreshCues = document.getElementById("btnRefreshCues");
+    if (btnRefreshCues) {
+        btnRefreshCues.addEventListener("click", function () {
+            if (window.UltraTranscript && window.UltraTranscript.words && window.UltraTranscript.words.length > 0) {
+                window.UltraTranscript.syncCaptionsModel();
+                showAlertModal("Captions Refreshed", "Generated subtitle cues from the current transcript model.");
+            } else {
+                showAlertModal("No Transcript", "No transcript data available. Please transcribe a sequence in the Transcript tab first.");
+            }
+        });
+    }
+
     if (btnExportSRT) {
         btnExportSRT.addEventListener("click", function () {
             exportSRTFile();
@@ -2031,6 +2056,13 @@ document.addEventListener("DOMContentLoaded", function () {
     var btnCloseImportGuide = document.getElementById("btnCloseImportGuide");
     if (btnCloseImportGuide) {
         btnCloseImportGuide.addEventListener("click", function () {
+            document.getElementById("importGuideModal").style.display = "none";
+        });
+    }
+
+    var btnDismissImportGuide = document.getElementById("btnDismissImportGuide");
+    if (btnDismissImportGuide) {
+        btnDismissImportGuide.addEventListener("click", function () {
             document.getElementById("importGuideModal").style.display = "none";
         });
     }

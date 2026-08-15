@@ -1,4 +1,4 @@
-// Settings & Model Manager
+// Caption Generator ULTRA - Settings & Model Manager
 var SettingsManager = {
     settings: {
         hardware: "auto"
@@ -87,24 +87,24 @@ var SettingsManager = {
 
         items.forEach(function(item) {
             var row = document.createElement("div");
-            row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: var(--bg-dark); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 4px;";
+            row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: var(--surface-elevated); border: 1px solid var(--border); padding: 6px 10px; border-radius: var(--radius-control);";
 
             var left = document.createElement("div");
-            left.style.cssText = "display: flex; align-items: center; gap: 6px;";
+            left.style.cssText = "display: flex; align-items: center; gap: 8px;";
 
             var icon = document.createElement("span");
-            icon.style.cssText = `font-weight: 700; font-size: 10px; font-family: monospace; color: ${item.ok ? 'var(--accent-blue)' : '#ff4d4d'};`;
+            icon.style.cssText = `font-weight: 600; font-size: 10px; font-family: monospace; color: ${item.ok ? 'var(--success)' : 'var(--danger)'};`;
             icon.innerText = item.ok ? "[OK]" : "[FAIL]";
 
             var name = document.createElement("span");
-            name.style.cssText = "font-weight: 600; color: var(--text-primary); font-size: 11px;";
+            name.style.cssText = "font-weight: 500; color: var(--text-primary); font-size: 11px;";
             name.innerText = item.name;
 
             left.appendChild(icon);
             left.appendChild(name);
 
             var right = document.createElement("span");
-            right.style.cssText = `font-size: 10px; color: ${item.ok ? 'var(--text-secondary)' : '#ff4d4d'}; font-family: monospace;`;
+            right.style.cssText = `font-size: 10px; color: ${item.ok ? 'var(--text-muted)' : 'var(--danger)'}; font-family: monospace;`;
             right.innerText = item.info;
 
             row.appendChild(left);
@@ -117,7 +117,7 @@ var SettingsManager = {
         var container = document.getElementById("modelListContainer");
         if (!container) return;
 
-        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 10px;">Checking dependencies and models...</div>';
+        container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 10px; font-size: 11px;">Checking dependencies and models...</div>';
 
         var self = this;
         DependencyInstaller.checkStatus(function(status) {
@@ -127,39 +127,46 @@ var SettingsManager = {
             var models = status.models_detailed || [];
 
             if (models.length === 0) {
-                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 10px;">No models detected.</div>';
+                container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 10px; font-size: 11px;">No models detected.</div>';
                 return;
             }
 
             models.forEach(function(model) {
                 var item = document.createElement("div");
-                item.className = "model-item";
+                item.className = "model-row";
+                item.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: var(--surface-elevated); border: 1px solid var(--border); border-radius: var(--radius-control); padding: 8px 10px;";
 
-                var header = document.createElement("div");
-                header.className = "model-item-header";
+                var left = document.createElement("div");
+                left.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+
+                var nameRow = document.createElement("div");
+                nameRow.style.cssText = "display: flex; align-items: center; gap: 6px;";
 
                 var nameLbl = document.createElement("span");
-                nameLbl.className = "model-name";
+                nameLbl.style.cssText = "font-weight: 600; font-size: 11px; color: var(--text-primary);";
                 nameLbl.innerText = `${model.name} (${model.size})`;
 
                 var statusTag = document.createElement("span");
-                statusTag.className = `status-tag ${model.installed ? 'installed' : 'not-installed'}`;
+                statusTag.className = `badge-status ${model.installed ? 'transcribed' : 'untranscribed'}`;
                 statusTag.innerText = model.installed ? "Installed" : "Not Installed";
 
-                header.appendChild(nameLbl);
-                header.appendChild(statusTag);
+                nameRow.appendChild(nameLbl);
+                nameRow.appendChild(statusTag);
 
                 var descLbl = document.createElement("div");
-                descLbl.className = "model-desc";
+                descLbl.style.cssText = "font-size: 10px; color: var(--text-muted);";
                 descLbl.innerText = model.desc;
 
-                var actionsRow = document.createElement("div");
-                actionsRow.className = "model-actions";
+                left.appendChild(nameRow);
+                left.appendChild(descLbl);
+
+                var right = document.createElement("div");
 
                 if (model.installed) {
                     var btnDelete = document.createElement("button");
                     btnDelete.className = "btn-danger";
-                    btnDelete.innerText = "Delete Model";
+                    btnDelete.style.cssText = "padding: 4px 8px; font-size: 10px;";
+                    btnDelete.innerText = "Delete";
                     btnDelete.addEventListener("click", function() {
                         if (confirm(`Are you sure you want to delete the ${model.name} model?`)) {
                             DependencyInstaller.deleteModel(model.key, function(success) {
@@ -172,20 +179,20 @@ var SettingsManager = {
                             });
                         }
                     });
-                    actionsRow.appendChild(btnDelete);
+                    right.appendChild(btnDelete);
                 } else {
                     var btnDownload = document.createElement("button");
                     btnDownload.className = "btn-secondary";
-                    btnDownload.innerText = "Download Model";
+                    btnDownload.style.cssText = "padding: 4px 10px; font-size: 10px;";
+                    btnDownload.innerText = "Download";
                     btnDownload.addEventListener("click", function() {
                         showInstallerModalForModel(model.key);
                     });
-                    actionsRow.appendChild(btnDownload);
+                    right.appendChild(btnDownload);
                 }
 
-                item.appendChild(header);
-                item.appendChild(descLbl);
-                item.appendChild(actionsRow);
+                item.appendChild(left);
+                item.appendChild(right);
                 container.appendChild(item);
             });
         });
@@ -214,7 +221,7 @@ var SettingsManager = {
                 var key = inputKey ? inputKey.value.trim() : "";
                 if (!key) {
                     lblStatus.innerText = "Please enter a license key.";
-                    lblStatus.style.color = "#ff4d4d";
+                    lblStatus.style.color = "var(--danger)";
                     return;
                 }
 
@@ -226,13 +233,13 @@ var SettingsManager = {
                     btnActivate.disabled = false;
                     if (valid) {
                         lblStatus.innerText = "Activated";
-                        lblStatus.style.color = "var(--accent-blue)";
+                        lblStatus.style.color = "var(--success)";
                         if (typeof showAlertModal === "function") {
-                            showAlertModal("License Activated", "Your license key has been successfully activated on this computer!");
+                            showAlertModal("License Activated", "Your license key has been successfully activated on this computer.");
                         }
                     } else {
                         lblStatus.innerText = message || "Invalid / already used on another computer";
-                        lblStatus.style.color = "#ff4d4d";
+                        lblStatus.style.color = "var(--danger)";
                         if (typeof showAlertModal === "function") {
                             showAlertModal("License Notice", message || "License activation failed.");
                         }
@@ -285,14 +292,14 @@ var SettingsManager = {
             if (valid) {
                 if (data && data.isOffline) {
                     lblStatus.innerText = "Activated (Offline Mode)";
-                    lblStatus.style.color = "#e6a23c";
+                    lblStatus.style.color = "var(--warning)";
                 } else {
                     lblStatus.innerText = "Activated";
-                    lblStatus.style.color = "var(--accent-blue)";
+                    lblStatus.style.color = "var(--success)";
                 }
             } else {
                 lblStatus.innerText = message || "Not activated";
-                lblStatus.style.color = "#ff4d4d";
+                lblStatus.style.color = "var(--danger)";
             }
         });
     }

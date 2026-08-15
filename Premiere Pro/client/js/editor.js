@@ -1,4 +1,4 @@
-// In-Panel Subtitle Cue Editor with Editable Timestamps
+// Caption Generator ULTRA - In-Panel Subtitle Cue Editor with Editable Timestamps
 var SubtitleEditor = {
     captions: [],
     words: [],
@@ -28,7 +28,7 @@ var SubtitleEditor = {
         if (badge && typeof UserPreferences !== "undefined" && typeof CaptionStyles !== "undefined") {
             var currentStyleId = UserPreferences.load().captionStyle || "standard";
             var currentStyleObj = CaptionStyles.getStyle(currentStyleId);
-            badge.innerText = "Style: " + currentStyleObj.name;
+            badge.innerText = currentStyleObj.name;
         }
 
         container.innerHTML = "";
@@ -36,9 +36,9 @@ var SubtitleEditor = {
         counter.innerText = total + (total === 1 ? " Subtitle" : " Subtitles");
 
         if (total === 0) {
-            container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); margin-top: 30px; padding: 20px 15px; background: var(--bg-dark); border: 1px dashed var(--border-color); border-radius: 6px; font-size: 11px; line-height: 1.6;">' +
-                '<div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px; font-size: 12px;">No captions yet.</div>' +
-                '<div>Go to the Transcribe tab and click \'Transcribe Timeline\' to generate subtitles.</div>' +
+            container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); margin-top: 15px; padding: 24px 16px; background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius-card); font-size: 11px; line-height: 1.6;">' +
+                '<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px; font-size: 12px;">No transcript data</div>' +
+                '<div>Transcribe a sequence in the Transcript tab first to generate and edit captions.</div>' +
                 '</div>';
             return;
         }
@@ -50,17 +50,16 @@ var SubtitleEditor = {
 
             var header = document.createElement("div");
             header.className = "cue-header";
-            header.style.cssText = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;";
 
             var timeGroup = document.createElement("div");
-            timeGroup.style.cssText = "display: flex; align-items: center; gap: 4px;";
+            timeGroup.style.cssText = "display: flex; align-items: center; gap: 6px;";
 
             // Playhead Jump
             var btnPlay = document.createElement("button");
             btnPlay.className = "btn-secondary";
-            btnPlay.style.cssText = "padding: 2px 6px; font-size: 9px; line-height: 1.2;";
-            btnPlay.innerText = "▶ Jump";
-            btnPlay.title = "Jump playhead to start timecode";
+            btnPlay.style.cssText = "padding: 2px 7px; font-size: 10px; height: 22px;";
+            btnPlay.innerText = "Jump";
+            btnPlay.title = "Jump timeline playhead to start";
             btnPlay.addEventListener("click", function() {
                 if (typeof ExtendScriptBridge !== "undefined" && ExtendScriptBridge.setPlayhead) {
                     ExtendScriptBridge.setPlayhead(cue.start);
@@ -70,7 +69,7 @@ var SubtitleEditor = {
             // Start Time Editable Input
             var lblStart = document.createElement("span");
             lblStart.innerText = "In:";
-            lblStart.style.cssText = "font-size: 10px; color: var(--text-secondary);";
+            lblStart.style.cssText = "font-size: 10px; color: var(--text-muted); font-weight: 500;";
 
             var inputStart = document.createElement("input");
             inputStart.type = "number";
@@ -78,7 +77,7 @@ var SubtitleEditor = {
             inputStart.min = "0";
             inputStart.title = "Start time (seconds)";
             inputStart.value = (parseFloat(cue.start) || 0).toFixed(1);
-            inputStart.style.cssText = "width: 55px; background-color: var(--bg-dark); border: 1px solid var(--border-color); color: var(--accent-blue); padding: 2px 4px; font-size: 10px; font-family: monospace; border-radius: 3px; outline: none;";
+            inputStart.style.cssText = "width: 58px; height: 22px; padding: 2px 4px; font-size: 10px; font-family: monospace; color: var(--accent);";
             inputStart.addEventListener("input", function(e) {
                 var val = parseFloat(e.target.value);
                 if (!isNaN(val)) {
@@ -88,7 +87,7 @@ var SubtitleEditor = {
 
             var lblEnd = document.createElement("span");
             lblEnd.innerText = "Out:";
-            lblEnd.style.cssText = "font-size: 10px; color: var(--text-secondary); margin-left: 4px;";
+            lblEnd.style.cssText = "font-size: 10px; color: var(--text-muted); font-weight: 500; margin-left: 2px;";
 
             // End Time Editable Input
             var inputEnd = document.createElement("input");
@@ -97,7 +96,7 @@ var SubtitleEditor = {
             inputEnd.min = "0";
             inputEnd.title = "End time (seconds)";
             inputEnd.value = (parseFloat(cue.end) || 0).toFixed(1);
-            inputEnd.style.cssText = "width: 55px; background-color: var(--bg-dark); border: 1px solid var(--border-color); color: var(--accent-blue); padding: 2px 4px; font-size: 10px; font-family: monospace; border-radius: 3px; outline: none;";
+            inputEnd.style.cssText = "width: 58px; height: 22px; padding: 2px 4px; font-size: 10px; font-family: monospace; color: var(--accent);";
             inputEnd.addEventListener("input", function(e) {
                 var val = parseFloat(e.target.value);
                 if (!isNaN(val)) {
@@ -114,7 +113,7 @@ var SubtitleEditor = {
             var btnDel = document.createElement("button");
             btnDel.className = "btn-danger";
             btnDel.innerText = "Delete";
-            btnDel.style.cssText = "padding: 2px 8px; font-size: 10px;";
+            btnDel.style.cssText = "padding: 2px 8px; font-size: 10px; height: 22px;";
             btnDel.addEventListener("click", function() {
                 self.deleteCue(index);
             });
