@@ -515,112 +515,134 @@ var TranscriptViewer = {
     wholeWord: false,
 
     render: function(wordsList) {
-        this.words = wordsList || [];
-        var container = document.getElementById("transcriptBody");
-        var wordCountBadge = document.getElementById("lblWordCountBadge");
-        var statsEl = document.getElementById("lblTranscriptStats");
-        var successContainer = document.getElementById("transcribeSuccessContainer");
+        try {
+            this.words = wordsList || [];
+            var container = document.getElementById("transcriptBody");
+            var wordCountBadge = document.getElementById("lblWordCountBadge");
+            var statsEl = document.getElementById("lblTranscriptStats");
+            var successContainer = document.getElementById("transcribeSuccessContainer");
+            var debugBanner = document.getElementById("transcriptDebugBanner");
 
-        if (successContainer) {
-            successContainer.style.display = "flex";
-        }
-
-        if (!container) return;
-        container.innerHTML = "";
-
-        var totalWords = this.words.length;
-        if (wordCountBadge) wordCountBadge.innerText = totalWords + (totalWords === 1 ? " Word" : " Words");
-
-        if (totalWords === 0) {
-            container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 11px;">No transcript words available.</div>';
-            if (statsEl) statsEl.innerText = "0 words";
-            return;
-        }
-
-        var self = this;
-        var pDiv = document.createElement("div");
-        pDiv.className = "transcript-paragraph";
-
-        var pauseCount = 0;
-        var paragraphCount = 1;
-
-        for (var i = 0; i < this.words.length; i++) {
-            var item = this.words[i];
-            var wordStr = (item.word || item.text || "").trim();
-            if (!wordStr) continue;
-
-            // Word span
-            var wordSpan = document.createElement("span");
-            wordSpan.className = "transcript-word";
-            wordSpan.innerText = wordStr + " ";
-            wordSpan.dataset.start = item.start;
-            wordSpan.dataset.end = item.end;
-            wordSpan.dataset.index = i;
-
-            if (self.searchQuery && self.matchesSearch(wordStr)) {
-                wordSpan.classList.add("word-search-match");
+            if (successContainer) {
+                successContainer.style.removeProperty("display");
+                successContainer.style.setProperty("display", "flex", "important");
+                successContainer.style.setProperty("visibility", "visible", "important");
+                successContainer.style.setProperty("opacity", "1", "important");
             }
 
-            if (self.showFillers && item.is_filler) {
-                wordSpan.classList.add("word-filler");
+            if (debugBanner) {
+                debugBanner.style.display = "block";
+                debugBanner.innerText = `[Transcript Loaded] Words: ${this.words.length} | Captions: ${SubtitleEditor.captions.length} | Status: Visible`;
             }
 
-            if (self.showCensored && item.is_censored) {
-                wordSpan.classList.add("word-censored");
+            if (!container) {
+                console.error("Transcript container #transcriptBody not found in DOM");
+                return;
             }
 
-            (function(startSec, spanEl) {
-                spanEl.addEventListener("click", function() {
-                    ExtendScriptBridge.setPlayhead(startSec);
-                    document.querySelectorAll(".transcript-word").forEach(function(w) { w.classList.remove("word-playhead-active"); });
-                    spanEl.classList.add("word-playhead-active");
-                });
-            })(item.start, wordSpan);
+            container.innerHTML = "";
+            var totalWords = this.words.length;
+            if (wordCountBadge) wordCountBadge.innerText = totalWords + (totalWords === 1 ? " Word" : " Words");
 
-            pDiv.appendChild(wordSpan);
+            if (totalWords === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 11px;">Transcription finished but no words were parsed.</div>';
+                if (statsEl) statsEl.innerText = "0 words • 0 pauses • 0 paragraphs";
+                return;
+            }
 
-            // Check for pause to next word
-            if (i < this.words.length - 1) {
-                var nextItem = this.words[i + 1];
-                var gap = (parseFloat(nextItem.start) || 0) - (parseFloat(item.end) || 0);
+            var self = this;
+            var pDiv = document.createElement("div");
+            pDiv.className = "transcript-paragraph";
 
-                if (gap >= self.minPauseLength && self.showPauses) {
-                    pauseCount++;
-                    var pauseSpan = document.createElement("span");
-                    pauseSpan.className = "transcript-pause";
-                    pauseSpan.innerText = `[${gap.toFixed(2)}s]`;
-                    pauseSpan.title = `Pause: ${gap.toFixed(2)}s. Click to jump playhead.`;
+            var pauseCount = 0;
+            var paragraphCount = 1;
 
-                    (function(pStart) {
-                        pauseSpan.addEventListener("click", function() {
-                            ExtendScriptBridge.setPlayhead(pStart);
-                        });
-                    })(item.end);
+            for (var i = 0; i < this.words.length; i++) {
+                var item = this.words[i];
+                var wordStr = (item.word !== undefined ? item.word : (item.text !== undefined ? item.text : (item.value || ""))).trim();
+                if (!wordStr) continue;
 
-                    pDiv.appendChild(pauseSpan);
-                    pDiv.appendChild(document.createTextNode(" "));
+                // Word span
+                var wordSpan = document.createElement("span");
+                wordSpan.className = "transcript-word";
+                wordSpan.innerText = wordStr + " ";
+                wordSpan.dataset.start = item.start;
+                wordSpan.dataset.end = item.end;
+                wordSpan.dataset.index = i;
+
+                if (self.searchQuery && self.matchesSearch(wordStr)) {
+                    wordSpan.classList.add("word-search-match");
                 }
 
-                // Break into paragraphs for long pauses or natural section breaks
-                var isPunctuationEnd = /[.!?]$/.test(wordStr);
-                if (gap >= 2.0 || (isPunctuationEnd && gap >= 1.0)) {
-                    container.appendChild(pDiv);
-                    pDiv = document.createElement("div");
-                    pDiv.className = "transcript-paragraph";
-                    paragraphCount++;
+                if (self.showFillers && item.is_filler) {
+                    wordSpan.classList.add("word-filler");
+                }
+
+                if (self.showCensored && item.is_censored) {
+                    wordSpan.classList.add("word-censored");
+                }
+
+                (function(startSec, spanEl) {
+                    spanEl.addEventListener("click", function() {
+                        ExtendScriptBridge.setPlayhead(startSec);
+                        document.querySelectorAll(".transcript-word").forEach(function(w) { w.classList.remove("word-playhead-active"); });
+                        spanEl.classList.add("word-playhead-active");
+                    });
+                })(item.start, wordSpan);
+
+                pDiv.appendChild(wordSpan);
+
+                // Check for pause or paragraph break to next word
+                if (i < this.words.length - 1) {
+                    var nextItem = this.words[i + 1];
+                    var gap = (parseFloat(nextItem.start) || 0) - (parseFloat(item.end) || 0);
+
+                    if (gap >= self.minPauseLength && self.showPauses) {
+                        pauseCount++;
+                        var pauseSpan = document.createElement("span");
+                        pauseSpan.className = "transcript-pause";
+                        pauseSpan.innerText = `[${gap.toFixed(2)}s]`;
+                        pauseSpan.title = `Pause: ${gap.toFixed(2)}s. Click to jump playhead.`;
+
+                        (function(pStart) {
+                            pauseSpan.addEventListener("click", function() {
+                                ExtendScriptBridge.setPlayhead(pStart);
+                            });
+                        })(item.end);
+
+                        pDiv.appendChild(pauseSpan);
+                        pDiv.appendChild(document.createTextNode(" "));
+                    }
+
+                    // Break into paragraphs for natural sentence breaks
+                    var isPunctuationEnd = /[.!?]$/.test(wordStr);
+                    if (gap >= 2.0 || (isPunctuationEnd && gap >= 0.8)) {
+                        container.appendChild(pDiv);
+                        pDiv = document.createElement("div");
+                        pDiv.className = "transcript-paragraph";
+                        paragraphCount++;
+                    }
                 }
             }
-        }
 
-        if (pDiv.childNodes.length > 0) {
-            container.appendChild(pDiv);
-        }
+            if (pDiv.childNodes.length > 0) {
+                container.appendChild(pDiv);
+            }
 
-        if (statsEl) {
-            statsEl.innerText = `${totalWords} words | ${pauseCount} pauses | ${paragraphCount} para`;
-        }
+            if (statsEl) {
+                statsEl.innerText = `${totalWords} words • ${pauseCount} pauses • ${paragraphCount} paragraphs`;
+            }
 
-        this.updateSearchMatches();
+            this.updateSearchMatches();
+        } catch(renderErr) {
+            console.error("TranscriptViewer.render error:", renderErr);
+            var dbg = document.getElementById("transcriptDebugBanner");
+            if (dbg) {
+                dbg.style.display = "block";
+                dbg.style.color = "var(--danger)";
+                dbg.innerText = "[Render Error] " + renderErr.toString();
+            }
+        }
     },
 
     matchesSearch: function(text) {
@@ -702,11 +724,17 @@ document.addEventListener("DOMContentLoaded", function() {
                 SettingsManager.renderModelManager();
             }
 
-            // Ensure transcript container stays visible when returning to Transcript tab
+            // Ensure transcript container and words stay rendered when switching to Transcript tab
             if (targetId === "tab-transcribe") {
                 if (TranscriptViewer.words && TranscriptViewer.words.length > 0) {
                     var sc = document.getElementById("transcribeSuccessContainer");
-                    if (sc) sc.style.display = "flex";
+                    if (sc) {
+                        sc.style.removeProperty("display");
+                        sc.style.setProperty("display", "flex", "important");
+                        sc.style.setProperty("visibility", "visible", "important");
+                        sc.style.setProperty("opacity", "1", "important");
+                    }
+                    TranscriptViewer.render(TranscriptViewer.words);
                 }
             }
         });
@@ -1197,59 +1225,84 @@ function runTranscribeWorkflow() {
                         }, 1800);
 
                         var offset = parseFloat(exportRes.exportStart) || 0;
-                        var finalCaptions = backendRes.captions || [];
-                        var finalWords = backendRes.words || [];
+                        var rawCaptions = backendRes.captions || backendRes.cues || backendRes.subtitles || [];
+                        var rawWords = backendRes.words || backendRes.words_list || backendRes.word_timestamps || backendRes.tokens || [];
 
-                        // If word tokens are missing or empty, derive words accurately from caption cues
-                        if ((!finalWords || finalWords.length === 0) && finalCaptions && finalCaptions.length > 0) {
-                            finalWords = [];
+                        // 1. Normalize captions with offset
+                        var finalCaptions = rawCaptions.map(function(c) {
+                            var s = parseFloat(c.start !== undefined ? c.start : c.startTime) || 0;
+                            var e = parseFloat(c.end !== undefined ? c.end : c.endTime) || (s + 1.0);
+                            return {
+                                start: Math.round((s + offset) * 1000) / 1000,
+                                end: Math.round((e + offset) * 1000) / 1000,
+                                text: (c.text !== undefined ? c.text : (c.caption || c.content || "")).trim()
+                            };
+                        });
+
+                        // 2. Normalize words with offset
+                        var finalWords = [];
+                        if (rawWords && rawWords.length > 0) {
+                            finalWords = rawWords.map(function(w) {
+                                var s = parseFloat(w.start !== undefined ? w.start : w.startTime) || 0;
+                                var e = parseFloat(w.end !== undefined ? w.end : w.endTime) || (s + 0.2);
+                                var wStr = (w.word !== undefined ? w.word : (w.text !== undefined ? w.text : (w.value || ""))).trim();
+                                return {
+                                    word: wStr,
+                                    start: Math.round((s + offset) * 1000) / 1000,
+                                    end: Math.round((e + offset) * 1000) / 1000,
+                                    is_filler: Boolean(w.is_filler),
+                                    is_censored: Boolean(w.is_censored)
+                                };
+                            }).filter(function(w) { return Boolean(w.word); });
+                        }
+
+                        // 3. Fallback: If words array is empty, derive directly from caption cues
+                        if (finalWords.length === 0 && finalCaptions.length > 0) {
                             finalCaptions.forEach(function(cap) {
                                 var capText = (cap.text || "").trim();
                                 if (!capText) return;
-                                var wordsInCap = capText.split(/\s+/);
-                                var capStart = parseFloat(cap.start) || 0;
-                                var capEnd = parseFloat(cap.end) || (capStart + 1.0);
-                                var capDur = Math.max(0.1, capEnd - capStart);
-                                var durPerWord = capDur / Math.max(1, wordsInCap.length);
+                                var tokens = capText.split(/\s+/);
+                                var cStart = parseFloat(cap.start) || 0;
+                                var cEnd = parseFloat(cap.end) || (cStart + 1.0);
+                                var cDur = Math.max(0.05, cEnd - cStart);
+                                var durPer = cDur / Math.max(1, tokens.length);
 
-                                wordsInCap.forEach(function(wStr, wIdx) {
-                                    var wStart = capStart + (wIdx * durPerWord);
-                                    var wEnd = wStart + durPerWord;
+                                tokens.forEach(function(tStr, tIdx) {
+                                    if (!tStr.trim()) return;
+                                    var s = cStart + (tIdx * durPer);
+                                    var e = s + durPer;
                                     finalWords.push({
-                                        word: wStr,
-                                        start: Math.round(wStart * 1000) / 1000,
-                                        end: Math.round(wEnd * 1000) / 1000
+                                        word: tStr.trim(),
+                                        start: Math.round(s * 1000) / 1000,
+                                        end: Math.round(e * 1000) / 1000,
+                                        is_filler: false,
+                                        is_censored: false
                                     });
                                 });
                             });
                         }
 
-                        if (offset > 0) {
-                            finalCaptions = finalCaptions.map(function(c) {
-                                return Object.assign({}, c, {
-                                    start: Math.round((c.start + offset) * 1000) / 1000,
-                                    end: Math.round((c.end + offset) * 1000) / 1000
-                                });
-                            });
-                            finalWords = finalWords.map(function(w) {
-                                return Object.assign({}, w, {
-                                    start: Math.round((w.start + offset) * 1000) / 1000,
-                                    end: Math.round((w.end + offset) * 1000) / 1000
-                                });
-                            });
-                        }
-
-                        // 1. Load into Subtitle Editor (Captions Tab)
+                        // 4. Populate Subtitle Editor (Captions Tab)
                         SubtitleEditor.loadCaptions(finalCaptions, finalWords);
 
-                        // 2. Render Interactive Transcript (Transcript Tab)
+                        // 5. Force Display and Render Interactive Transcript (Transcript Tab)
                         var successContainer = document.getElementById("transcribeSuccessContainer");
                         if (successContainer) {
-                            successContainer.style.display = "flex";
+                            successContainer.style.removeProperty("display");
+                            successContainer.style.setProperty("display", "flex", "important");
+                            successContainer.style.setProperty("visibility", "visible", "important");
+                            successContainer.style.setProperty("opacity", "1", "important");
                         }
+
                         TranscriptViewer.render(finalWords);
 
-                        // 3. Update active comp status badge
+                        if (successContainer) {
+                            try {
+                                successContainer.scrollIntoView({ behavior: "smooth", block: "start" });
+                            } catch(eSc) {}
+                        }
+
+                        // 6. Update active comp status badge
                         var compBadge = document.getElementById("lblCompStatusBadge");
                         if (compBadge) {
                             compBadge.className = "badge-status transcribed";
