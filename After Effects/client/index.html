@@ -170,78 +170,18 @@
             </div>
         </div>
 
-        <!-- Visible Diagnostics / Debug Banner -->
-        <div id="transcriptDebugBanner" style="display: none; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #93C5FD; margin-top: 6px; font-family: monospace;"></div>
-
-        <!-- 6. Interactive Transcript Card (Appears after Transcription) -->
-        <div class="transcript-viewer-card" id="transcribeSuccessContainer" style="display: none; margin-top: 4px;">
-            <div class="transcript-header-row">
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="font-weight: 600; font-size: 12px; color: var(--text-primary);">Interactive Transcript</span>
-                    <span class="badge-status transcribed" id="lblWordCountBadge">0 Words</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                    <button class="btn-three-dot" id="btnTranscriptOptions" title="View Options">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-                    </button>
-                </div>
-
-                <!-- Transcript Options Dropdown Menu -->
-                <div class="transcript-dropdown-menu" id="transcriptOptionsMenu">
-                    <div style="padding: 6px 8px; font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">View Options</div>
-                    <div style="padding: 4px 8px;">
-                        <div class="label-row">
-                            <span style="font-size: 11px; color: var(--text-secondary);">Min Pause Length</span>
-                            <span class="val-badge" id="lblMinPauseVal">0.30s</span>
-                        </div>
-                        <input type="range" id="sliderMinPause" min="5" max="200" value="30" style="margin: 4px 0;">
-                    </div>
-                </div>
+        <!-- Success State Card (Appears after Transcription) -->
+        <div class="card" id="transcribeSuccessContainer" style="display: none; border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.06); padding: 14px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <div style="font-weight: 600; font-size: 12px; color: var(--text-primary);">Transcription Complete</div>
+                <span class="badge-status transcribed" id="lblSuccessBadge">Ready</span>
             </div>
-
-            <!-- Toolbar: Search & Filters -->
-            <div class="transcript-toolbar">
-                <div class="transcript-search-row">
-                    <div class="transcript-search-input-wrap">
-                        <input type="text" class="transcript-search-input" id="transcriptSearchInput" placeholder="Find words...">
-                        <button class="search-clear-btn" id="btnClearSearch" style="display: none;">&times;</button>
-                    </div>
-                    <button class="search-option-btn" id="btnMatchCase" title="Match Case">Aa</button>
-                    <button class="search-option-btn" id="btnWholeWord" title="Match Whole Word">W</button>
-                    <span class="search-matches-label" id="lblSearchMatches"></span>
-                </div>
-
-                <!-- Replace Bar -->
-                <div class="transcript-search-row" id="replaceRow">
-                    <input type="text" class="transcript-search-input" id="inputReplaceText" placeholder="Replace with...">
-                    <button class="btn-secondary" id="btnReplaceOne" style="padding: 3px 8px; font-size: 10px;">Replace</button>
-                    <button class="btn-secondary" id="btnReplaceAll" style="padding: 3px 8px; font-size: 10px;">All</button>
-                </div>
-
-                <!-- Filter Toggle Pills -->
-                <div class="filter-pills-row">
-                    <span class="filter-pill" id="pillFillerWords" title="Highlight filler words">Fillers</span>
-                    <span class="filter-pill" id="pillCensoredWords" title="Highlight censored words">Censored</span>
-                    <span class="filter-pill active-pauses" id="pillPauses" title="Toggle pause tokens">Pauses [..]</span>
-                    <span style="margin-left: auto; font-size: 10px; color: var(--text-muted);" id="lblTranscriptStats"></span>
-                </div>
-            </div>
-
-            <!-- Transcript Body (Words + Pauses with Playhead Click Navigation) -->
-            <div class="transcript-body" id="transcriptBody">
-                <!-- Dynamically populated with transcript words and pause tokens -->
-            </div>
-
-            <!-- Action Footer inside Transcript Card -->
-            <div style="padding: 8px 10px; background: var(--surface-elevated); border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center;">
-                <button class="btn-primary" id="btnTranscriptCreateLayers" style="flex: 1; padding: 6px 12px; font-size: 11px;">
-                    Create Text Layers in Comp
-                </button>
-                <button class="btn-secondary" id="btnExportTranscriptTXT" style="padding: 6px 12px; font-size: 11px;">
-                    Export TXT
-                </button>
-                <button class="btn-secondary" id="btnExportTranscriptJSON" style="padding: 6px 12px; font-size: 11px;">
-                    Export JSON
+            <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;" id="lblSuccessMessage">
+                Transcription finished successfully. Open the Captions tab to review cues, customize typography, and create text layers in your composition.
+            </p>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-primary" id="btnGoToCaptions" style="flex: 1; padding: 7px 12px; font-size: 11px; font-weight: 600;">
+                    Go to Captions
                 </button>
             </div>
         </div>

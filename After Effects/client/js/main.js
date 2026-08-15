@@ -276,9 +276,6 @@ var UserPreferences = {
         var selScope = document.getElementById("selectTranscribeScope");
         if (selScope) p.scope = selScope.value;
 
-        var slMinPause = document.getElementById("sliderMinPause");
-        if (slMinPause) p.minPauseLength = parseInt(slMinPause.value, 10);
-
         return p;
     },
 
@@ -360,13 +357,6 @@ var UserPreferences = {
 
         var selScope = document.getElementById("selectTranscribeScope");
         if (selScope && prefs.scope) selScope.value = prefs.scope;
-
-        var slMinPause = document.getElementById("sliderMinPause");
-        if (slMinPause && prefs.minPauseLength) {
-            slMinPause.value = prefs.minPauseLength;
-            var lblP = document.getElementById("lblMinPauseVal");
-            if (lblP) lblP.innerText = (prefs.minPauseLength / 100.0).toFixed(2) + "s";
-        }
     },
 
     autoSave: function() {
@@ -503,210 +493,6 @@ function updateScopeUI() {
     }
 }
 
-// Interactive Transcript Viewer Controller
-var TranscriptViewer = {
-    words: [],
-    minPauseLength: 0.30,
-    showFillers: false,
-    showCensored: false,
-    showPauses: true,
-    searchQuery: "",
-    matchCase: false,
-    wholeWord: false,
-
-    render: function(wordsList) {
-        try {
-            this.words = wordsList || [];
-            var container = document.getElementById("transcriptBody");
-            var wordCountBadge = document.getElementById("lblWordCountBadge");
-            var statsEl = document.getElementById("lblTranscriptStats");
-            var successContainer = document.getElementById("transcribeSuccessContainer");
-            var debugBanner = document.getElementById("transcriptDebugBanner");
-
-            if (successContainer) {
-                successContainer.style.removeProperty("display");
-                successContainer.style.setProperty("display", "flex", "important");
-                successContainer.style.setProperty("visibility", "visible", "important");
-                successContainer.style.setProperty("opacity", "1", "important");
-            }
-
-            if (!container) {
-                console.error("Transcript container #transcriptBody not found in DOM");
-                if (debugBanner) {
-                    debugBanner.style.display = "block";
-                    debugBanner.innerText = `[Error] #transcriptBody element missing in DOM!`;
-                }
-                return;
-            }
-
-            container.innerHTML = "";
-            var totalWords = this.words.length;
-            if (wordCountBadge) wordCountBadge.innerText = totalWords + (totalWords === 1 ? " Word" : " Words");
-
-            if (totalWords === 0) {
-                container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 11px;">Transcription finished but no words were parsed.</div>';
-                if (statsEl) statsEl.innerText = "0 words • 0 pauses • 0 paragraphs";
-                if (debugBanner) {
-                    debugBanner.style.display = "block";
-                    debugBanner.innerHTML = `<div style="margin-bottom: 2px;">[Transcript Loaded] Words: 0 | Captions: ${SubtitleEditor.captions.length} | Status: Empty</div>` +
-                        `<div>[DOM Diagnostic] transcriptBody childCount: ${container.children.length} | textLength: ${(container.innerText || "").length}</div>`;
-                }
-                return;
-            }
-
-            var self = this;
-            var pDiv = document.createElement("div");
-            pDiv.className = "transcript-paragraph";
-
-            var pauseCount = 0;
-            var paragraphCount = 1;
-
-            for (var i = 0; i < this.words.length; i++) {
-                var item = this.words[i];
-                var wordStr = (item.word !== undefined ? item.word : (item.text !== undefined ? item.text : (item.value || ""))).trim();
-                if (!wordStr) continue;
-
-                // Word span
-                var wordSpan = document.createElement("span");
-                wordSpan.className = "transcript-word";
-                wordSpan.innerText = wordStr + " ";
-                wordSpan.dataset.start = item.start;
-                wordSpan.dataset.end = item.end;
-                wordSpan.dataset.index = i;
-
-                if (self.searchQuery && self.matchesSearch(wordStr)) {
-                    wordSpan.classList.add("word-search-match");
-                }
-
-                if (self.showFillers && item.is_filler) {
-                    wordSpan.classList.add("word-filler");
-                }
-
-                if (self.showCensored && item.is_censored) {
-                    wordSpan.classList.add("word-censored");
-                }
-
-                (function(startSec, spanEl) {
-                    spanEl.addEventListener("click", function() {
-                        ExtendScriptBridge.setPlayhead(startSec);
-                        document.querySelectorAll(".transcript-word").forEach(function(w) { w.classList.remove("word-playhead-active"); });
-                        spanEl.classList.add("word-playhead-active");
-                    });
-                })(item.start, wordSpan);
-
-                pDiv.appendChild(wordSpan);
-
-                // Check for pause or paragraph break to next word
-                if (i < this.words.length - 1) {
-                    var nextItem = this.words[i + 1];
-                    var gap = (parseFloat(nextItem.start) || 0) - (parseFloat(item.end) || 0);
-
-                    if (gap >= self.minPauseLength && self.showPauses) {
-                        pauseCount++;
-                        var pauseSpan = document.createElement("span");
-                        pauseSpan.className = "transcript-pause";
-                        pauseSpan.innerText = `[${gap.toFixed(2)}s]`;
-                        pauseSpan.title = `Pause: ${gap.toFixed(2)}s. Click to jump playhead.`;
-
-                        (function(pStart) {
-                            pauseSpan.addEventListener("click", function() {
-                                ExtendScriptBridge.setPlayhead(pStart);
-                            });
-                        })(item.end);
-
-                        pDiv.appendChild(pauseSpan);
-                        pDiv.appendChild(document.createTextNode(" "));
-                    }
-
-                    // Break into paragraphs for natural sentence breaks
-                    var isPunctuationEnd = /[.!?]$/.test(wordStr);
-                    if (gap >= 2.0 || (isPunctuationEnd && gap >= 0.8)) {
-                        container.appendChild(pDiv);
-                        pDiv = document.createElement("div");
-                        pDiv.className = "transcript-paragraph";
-                        paragraphCount++;
-                    }
-                }
-            }
-
-            if (pDiv.childNodes.length > 0) {
-                container.appendChild(pDiv);
-            }
-
-            if (statsEl) {
-                statsEl.innerText = `${totalWords} words • ${pauseCount} pauses • ${paragraphCount} paragraphs`;
-            }
-
-            if (debugBanner) {
-                var childCount = container ? container.children.length : 0;
-                var textLen = container ? (container.innerText || "").length : 0;
-                debugBanner.style.display = "block";
-                debugBanner.innerHTML = `<div style="margin-bottom: 2px;">[Transcript Loaded] Words: ${this.words.length} | Captions: ${SubtitleEditor.captions.length} | Status: Visible</div>` +
-                    `<div>[DOM Diagnostic] transcriptBody childCount: ${childCount} | textLength: ${textLen}</div>`;
-            }
-
-            this.updateSearchMatches();
-        } catch(renderErr) {
-            console.error("TranscriptViewer.render error:", renderErr);
-            var dbg = document.getElementById("transcriptDebugBanner");
-            if (dbg) {
-                dbg.style.display = "block";
-                dbg.style.color = "var(--danger)";
-                dbg.innerText = "[Render Error] " + renderErr.toString();
-            }
-        }
-    },
-
-    matchesSearch: function(text) {
-        if (!this.searchQuery) return false;
-        var q = this.matchCase ? this.searchQuery : this.searchQuery.toLowerCase();
-        var t = this.matchCase ? text : text.toLowerCase();
-        if (this.wholeWord) {
-            return t.replace(/[.,!?;:"]/g, "") === q;
-        }
-        return t.indexOf(q) !== -1;
-    },
-
-    updateSearchMatches: function() {
-        var lbl = document.getElementById("lblSearchMatches");
-        if (!lbl) return;
-        if (!this.searchQuery) {
-            lbl.innerText = "";
-            return;
-        }
-        var matches = document.querySelectorAll(".word-search-match").length;
-        lbl.innerText = matches + " found";
-    },
-
-    replaceOne: function(replaceText) {
-        var match = document.querySelector(".word-search-match");
-        if (match) {
-            var idx = parseInt(match.dataset.index, 10);
-            if (!isNaN(idx) && this.words[idx]) {
-                this.words[idx].word = replaceText;
-                this.render(this.words);
-                SubtitleEditor.loadCaptions(SubtitleEditor.captions, this.words);
-            }
-        }
-    },
-
-    replaceAll: function(replaceText) {
-        var self = this;
-        var count = 0;
-        this.words.forEach(function(item) {
-            var wordStr = (item.word || item.text || "").trim();
-            if (self.matchesSearch(wordStr)) {
-                item.word = replaceText;
-                count++;
-            }
-        });
-        if (count > 0) {
-            this.render(this.words);
-            SubtitleEditor.loadCaptions(SubtitleEditor.captions, this.words);
-        }
-    }
-};
-
 // Main DOM Ready Setup
 document.addEventListener("DOMContentLoaded", function() {
     // 1. Language Searchable Selects
@@ -718,7 +504,7 @@ document.addEventListener("DOMContentLoaded", function() {
         UserPreferences.autoSave();
     });
 
-    // 2. Tab Navigation (3 Tabs)
+    // 2. Tab Navigation (3 Tabs: Transcript, Captions, Settings)
     var tabs = document.querySelectorAll(".tab-btn");
     tabs.forEach(function(tab) {
         tab.addEventListener("click", function() {
@@ -734,20 +520,6 @@ document.addEventListener("DOMContentLoaded", function() {
             if (targetId === "tab-settings" && typeof SettingsManager !== "undefined") {
                 SettingsManager.checkLicenseStatus();
                 SettingsManager.renderModelManager();
-            }
-
-            // Ensure transcript container and words stay rendered when switching to Transcript tab
-            if (targetId === "tab-transcribe") {
-                if (TranscriptViewer.words && TranscriptViewer.words.length > 0) {
-                    var sc = document.getElementById("transcribeSuccessContainer");
-                    if (sc) {
-                        sc.style.removeProperty("display");
-                        sc.style.setProperty("display", "flex", "important");
-                        sc.style.setProperty("visibility", "visible", "important");
-                        sc.style.setProperty("opacity", "1", "important");
-                    }
-                    TranscriptViewer.render(TranscriptViewer.words);
-                }
             }
         });
     });
@@ -822,120 +594,12 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // 6. Transcript Search & Filter Controls
-    var searchInput = document.getElementById("transcriptSearchInput");
-    var btnClearSearch = document.getElementById("btnClearSearch");
-    var btnMatchCase = document.getElementById("btnMatchCase");
-    var btnWholeWord = document.getElementById("btnWholeWord");
-
-    if (searchInput) {
-        searchInput.addEventListener("input", function() {
-            TranscriptViewer.searchQuery = searchInput.value;
-            if (btnClearSearch) btnClearSearch.style.display = searchInput.value ? "inline-block" : "none";
-            TranscriptViewer.render(TranscriptViewer.words);
-        });
-    }
-
-    if (btnClearSearch) {
-        btnClearSearch.addEventListener("click", function() {
-            if (searchInput) searchInput.value = "";
-            TranscriptViewer.searchQuery = "";
-            btnClearSearch.style.display = "none";
-            TranscriptViewer.render(TranscriptViewer.words);
-        });
-    }
-
-    if (btnMatchCase) {
-        btnMatchCase.addEventListener("click", function() {
-            TranscriptViewer.matchCase = !TranscriptViewer.matchCase;
-            btnMatchCase.classList.toggle("active", TranscriptViewer.matchCase);
-            TranscriptViewer.render(TranscriptViewer.words);
-        });
-    }
-
-    if (btnWholeWord) {
-        btnWholeWord.addEventListener("click", function() {
-            TranscriptViewer.wholeWord = !TranscriptViewer.wholeWord;
-            btnWholeWord.classList.toggle("active", TranscriptViewer.wholeWord);
-            TranscriptViewer.render(TranscriptViewer.words);
-        });
-    }
-
-    var btnReplaceOne = document.getElementById("btnReplaceOne");
-    if (btnReplaceOne) {
-        btnReplaceOne.addEventListener("click", function() {
-            var rep = document.getElementById("inputReplaceText");
-            if (rep) TranscriptViewer.replaceOne(rep.value);
-        });
-    }
-
-    var btnReplaceAll = document.getElementById("btnReplaceAll");
-    if (btnReplaceAll) {
-        btnReplaceAll.addEventListener("click", function() {
-            var rep = document.getElementById("inputReplaceText");
-            if (rep) TranscriptViewer.replaceAll(rep.value);
-        });
-    }
-
-    var pillFillers = document.getElementById("pillFillerWords");
-    if (pillFillers) {
-        pillFillers.addEventListener("click", function() {
-            TranscriptViewer.showFillers = !TranscriptViewer.showFillers;
-            pillFillers.classList.toggle("active-filler", TranscriptViewer.showFillers);
-            TranscriptViewer.render(TranscriptViewer.words);
-        });
-    }
-
-    var pillCensored = document.getElementById("pillCensoredWords");
-    if (pillCensored) {
-        pillCensored.addEventListener("click", function() {
-            TranscriptViewer.showCensored = !TranscriptViewer.showCensored;
-            pillCensored.classList.toggle("active-censored", TranscriptViewer.showCensored);
-            TranscriptViewer.render(TranscriptViewer.words);
-        });
-    }
-
-    var pillPauses = document.getElementById("pillPauses");
-    if (pillPauses) {
-        pillPauses.addEventListener("click", function() {
-            TranscriptViewer.showPauses = !TranscriptViewer.showPauses;
-            pillPauses.classList.toggle("active-pauses", TranscriptViewer.showPauses);
-            TranscriptViewer.render(TranscriptViewer.words);
-        });
-    }
-
-    var btnTranscriptOpts = document.getElementById("btnTranscriptOptions");
-    var menuOpts = document.getElementById("transcriptOptionsMenu");
-    if (btnTranscriptOpts && menuOpts) {
-        btnTranscriptOpts.addEventListener("click", function(e) {
-            e.stopPropagation();
-            menuOpts.classList.toggle("show");
-        });
-        document.addEventListener("click", function(e) {
-            if (!menuOpts.contains(e.target)) menuOpts.classList.remove("show");
-        });
-    }
-
-    var sliderMinPause = document.getElementById("sliderMinPause");
-    if (sliderMinPause) {
-        sliderMinPause.addEventListener("input", function() {
-            var sec = parseFloat(sliderMinPause.value) / 100.0;
-            var lbl = document.getElementById("lblMinPauseVal");
-            if (lbl) lbl.innerText = sec.toFixed(2) + "s";
-            TranscriptViewer.minPauseLength = sec;
-            TranscriptViewer.render(TranscriptViewer.words);
-            UserPreferences.autoSave();
-        });
-    }
-
-    // 7. Action Buttons
+    // 6. Action Buttons
     var btnTranscribe = document.getElementById("btnTranscribe");
     var btnCancelTranscribe = document.getElementById("btnCancelTranscribe");
+    var btnGoToCaptions = document.getElementById("btnGoToCaptions");
     var btnApplyEdits = document.getElementById("btnApplyEdits");
     var btnExportSRT = document.getElementById("btnExportSRT");
-    var btnTranscriptCreateLayers = document.getElementById("btnTranscriptCreateLayers");
-    var btnExportTranscriptTXT = document.getElementById("btnExportTranscriptTXT");
-    var btnExportTranscriptJSON = document.getElementById("btnExportTranscriptJSON");
 
     if (btnTranscribe) {
         btnTranscribe.addEventListener("click", function() {
@@ -949,27 +613,18 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    if (btnGoToCaptions) {
+        btnGoToCaptions.addEventListener("click", function() {
+            var tabBtnEditor = document.querySelector('.tab-btn[data-tab="tab-editor"]');
+            if (tabBtnEditor) {
+                tabBtnEditor.click();
+            }
+        });
+    }
+
     if (btnApplyEdits) {
         btnApplyEdits.addEventListener("click", function() {
             importSubtitlesToSequence();
-        });
-    }
-
-    if (btnTranscriptCreateLayers) {
-        btnTranscriptCreateLayers.addEventListener("click", function() {
-            importSubtitlesToSequence();
-        });
-    }
-
-    if (btnExportTranscriptTXT) {
-        btnExportTranscriptTXT.addEventListener("click", function() {
-            exportTranscriptTXT();
-        });
-    }
-
-    if (btnExportTranscriptJSON) {
-        btnExportTranscriptJSON.addEventListener("click", function() {
-            exportTranscriptJSON();
         });
     }
 
@@ -979,7 +634,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // 8. Modals
+    // 7. Modals
     var btnModalCancel = document.getElementById("btnModalCancel");
     var btnModalClose = document.getElementById("btnModalClose");
     if (btnModalCancel) {
@@ -998,7 +653,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // 9. Background Check & Model Dropdown
+    // 8. Background Check & Model Dropdown
     DependencyInstaller.checkStatus(function(status) {
         if (status && status.installed_models) {
             updateModelDropdown(status.installed_models);
@@ -1008,7 +663,7 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     });
 
-    // 10. Active Composition Polling Loop
+    // 9. Active Composition Polling Loop
     pollActiveCompInfo();
     setInterval(pollActiveCompInfo, 2000);
 });
@@ -1163,6 +818,7 @@ function runTranscribeWorkflow() {
         var statusLog = document.getElementById("transcribeStatusLog");
         var progFill = document.getElementById("transcribeProgressFill");
         var progPct = document.getElementById("transcribePercentVal");
+        var successContainer = document.getElementById("transcribeSuccessContainer");
 
         if (!btn || btn.disabled) return;
 
@@ -1173,6 +829,8 @@ function runTranscribeWorkflow() {
             showAlertModal("No Layers Selected", "Please select one or more layers in the After Effects timeline before transcribing.");
             return;
         }
+
+        if (successContainer) successContainer.style.display = "none";
 
         isTranscriptionCancelled = false;
         var originalText = btn.innerText;
@@ -1318,20 +976,16 @@ function runTranscribeWorkflow() {
                         // 4. Populate Subtitle Editor (Captions Tab)
                         SubtitleEditor.loadCaptions(finalCaptions, finalWords);
 
-                        // 5. Force Display and Render Interactive Transcript (Transcript Tab)
+                        // 5. Display Clean Success Card (Transcript Tab)
                         var successContainer = document.getElementById("transcribeSuccessContainer");
-                        if (successContainer) {
-                            successContainer.style.removeProperty("display");
-                            successContainer.style.setProperty("display", "flex", "important");
-                            successContainer.style.setProperty("visibility", "visible", "important");
-                            successContainer.style.setProperty("opacity", "1", "important");
+                        var successMsg = document.getElementById("lblSuccessMessage");
+                        if (successMsg) {
+                            successMsg.innerText = "Transcription finished (" + finalCaptions.length + " cues generated). Open the Captions tab to review cues and create text layers in your composition.";
                         }
-
-                        TranscriptViewer.render(finalWords);
-
                         if (successContainer) {
+                            successContainer.style.display = "block";
                             try {
-                                successContainer.scrollIntoView({ behavior: "smooth", block: "start" });
+                                successContainer.scrollIntoView({ behavior: "smooth", block: "nearest" });
                             } catch(eSc) {}
                         }
 
@@ -1472,7 +1126,6 @@ function runPythonBackend(audioPath, projectDetails, callback) {
 function importSubtitlesToSequence() {
     ensureLicensedAction("import", function() {
         var btn = document.getElementById("btnApplyEdits");
-        var btnTrans = document.getElementById("btnTranscriptCreateLayers");
         var originalText = "Create Text Layers in Comp";
 
         var captions = SubtitleEditor.captions;
@@ -1485,10 +1138,6 @@ function importSubtitlesToSequence() {
         if (btn) {
             btn.disabled = true;
             btn.innerText = "Creating Text Layers...";
-        }
-        if (btnTrans) {
-            btnTrans.disabled = true;
-            btnTrans.innerText = "Creating...";
         }
 
         var methodSelect = document.getElementById("selectImportMethod");
@@ -1525,10 +1174,6 @@ function importSubtitlesToSequence() {
                     btn.disabled = false;
                     btn.innerText = originalText;
                 }
-                if (btnTrans) {
-                    btnTrans.disabled = false;
-                    btnTrans.innerText = "Create Text Layers in Comp";
-                }
                 if (!res || !res.success) {
                     var rawErr = (res && res.error) ? res.error : "Unknown error";
                     showAlertModal("Subtitle Error", "Could not create text layers: " + rawErr);
@@ -1541,74 +1186,7 @@ function importSubtitlesToSequence() {
                 btn.disabled = false;
                 btn.innerText = originalText;
             }
-            if (btnTrans) {
-                btnTrans.disabled = false;
-                btnTrans.innerText = "Create Text Layers in Comp";
-            }
             showAlertModal("Preview Mode", "Created " + captions.length + " text layers in active comp (Browser Preview Mode).");
-        }
-    });
-}
-
-function exportTranscriptTXT() {
-    ensureLicensedAction("export", function() {
-        if (!TranscriptViewer.words || TranscriptViewer.words.length === 0) {
-            showAlertModal("No Transcript", "No transcript words available to export.");
-            return;
-        }
-
-        var fullText = TranscriptViewer.words.map(function(w) {
-            return (w.word !== undefined ? w.word : (w.text || "")).trim();
-        }).join(" ");
-
-        if (typeof require !== "undefined") {
-            var fs = require("fs");
-            var path = require("path");
-            var os = require("os");
-            var desktopPath = path.join(os.homedir(), "Desktop", "transcript.txt");
-
-            try {
-                fs.writeFileSync(desktopPath, fullText, "utf-8");
-                showAlertModal("Transcript Exported", "Plain text transcript exported to your Desktop:\n" + desktopPath.replace(/\\/g, "/"));
-            } catch(e) {
-                var tempPath = path.join(getTempFolder(), "transcript.txt");
-                fs.writeFileSync(tempPath, fullText, "utf-8");
-                showAlertModal("Transcript Exported", "Plain text transcript exported to:\n" + tempPath.replace(/\\/g, "/"));
-            }
-        } else {
-            showAlertModal("Transcript Exported", "Plain text transcript exported (Browser Preview Mode).");
-        }
-    });
-}
-
-function exportTranscriptJSON() {
-    ensureLicensedAction("export", function() {
-        if (!TranscriptViewer.words || TranscriptViewer.words.length === 0) {
-            showAlertModal("No Transcript", "No transcript words available to export.");
-            return;
-        }
-
-        var jsonPayload = {
-            captions: SubtitleEditor.captions || [],
-            words: TranscriptViewer.words || []
-        };
-
-        if (typeof require !== "undefined") {
-            var fs = require("fs");
-            var path = require("path");
-            var os = require("os");
-            var desktopPath = path.join(os.homedir(), "Desktop", "transcript.json");
-
-            try {
-                fs.writeFileSync(desktopPath, JSON.stringify(jsonPayload, null, 4), "utf-8");
-                showAlertModal("JSON Exported", "Transcript JSON exported to your Desktop:\n" + desktopPath.replace(/\\/g, "/"));
-            } catch(e) {
-                var tempPath = path.join(getTempFolder(), "transcript.json");
-                fs.writeFileSync(tempPath, JSON.stringify(jsonPayload, null, 4), "utf-8");
-                showAlertModal("JSON Exported", "Transcript JSON exported to:\n" + tempPath.replace(/\\/g, "/"));
-            }
-        } else {
-            showAlertModal("JSON Exported", "Transcript JSON exported (Browser Preview Mode).");
         }
     });
 }
