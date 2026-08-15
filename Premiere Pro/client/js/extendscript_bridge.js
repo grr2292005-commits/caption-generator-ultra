@@ -25,17 +25,17 @@ var ExtendScriptBridge = {
         });
     },
 
-    exportAudio: function(targetPath, selectedClipIdx, callback) {
+    exportAudio: function(targetPath, scopeMode, callback) {
         if (typeof targetPath === "function") {
             callback = targetPath;
             targetPath = "";
-            selectedClipIdx = "all";
-        } else if (typeof selectedClipIdx === "function") {
-            callback = selectedClipIdx;
-            selectedClipIdx = "all";
+            scopeMode = "all";
+        } else if (typeof scopeMode === "function") {
+            callback = scopeMode;
+            scopeMode = "all";
         }
 
-        var clipParam = (selectedClipIdx !== undefined && selectedClipIdx !== null && selectedClipIdx !== "") ? String(selectedClipIdx) : "all";
+        var scopeParam = (scopeMode === "selected") ? "selected" : "all";
 
         this.loadHost(function(ok, err) {
             if (!ok) {
@@ -43,7 +43,7 @@ var ExtendScriptBridge = {
                 return;
             }
 
-            var cmd = '$._PPP_.exportAudio("", "' + clipParam + '")';
+            var cmd = '$._PPP_.exportAudio("", "' + scopeParam + '")';
             ExtendScriptBridge.csInterface.evalScript(cmd, function(result) {
                 if (!result || result === "EvalScript error.") {
                     if (callback) callback({ success: false, error: "ExtendScript evaluation failed. Result: " + result });
@@ -63,25 +63,30 @@ var ExtendScriptBridge = {
         });
     },
 
-    getSequenceClips: function(callback) {
+    getSelectedClipsInfo: function(callback) {
         this.loadHost(function(ok, err) {
             if (!ok) {
-                if (callback) callback({ success: false, error: err || "Host script failed to load", clips: [] });
+                if (callback) callback({ success: false, error: err || "Host script failed to load", selectedCount: 0, clips: [] });
                 return;
             }
-            ExtendScriptBridge.csInterface.evalScript("$._PPP_.getSequenceClips()", function(res) {
+            ExtendScriptBridge.csInterface.evalScript("$._PPP_.getSelectedClipsInfo()", function(res) {
                 if (res && res.indexOf("OK|") === 0) {
                     try {
                         var jsonStr = res.substring(3);
-                        var clips = JSON.parse(jsonStr);
-                        if (callback) callback({ success: true, clips: clips });
+                        var parsed = JSON.parse(jsonStr);
+                        if (callback) callback({ 
+                            success: true, 
+                            selectedCount: parsed.selectedCount || 0,
+                            totalDuration: parsed.totalDuration || 0,
+                            clips: parsed.clips || []
+                        });
                     } catch(eJson) {
-                        if (callback) callback({ success: false, error: "JSON parse error: " + eJson.message, clips: [] });
+                        if (callback) callback({ success: false, error: "JSON parse error: " + eJson.message, selectedCount: 0, clips: [] });
                     }
                 } else if (res && res.indexOf("ERR|") === 0) {
-                    if (callback) callback({ success: false, error: res.substring(4), clips: [] });
+                    if (callback) callback({ success: false, error: res.substring(4), selectedCount: 0, clips: [] });
                 } else {
-                    if (callback) callback({ success: false, error: res || "Unknown response", clips: [] });
+                    if (callback) callback({ success: false, error: res || "Unknown response", selectedCount: 0, clips: [] });
                 }
             });
         });

@@ -373,7 +373,21 @@ function stringifyJson(obj) {
     return "null";
 }
 
-$._PPP_.getSequenceClips = function() {
+function isTrackItemSelected(item) {
+    if (!item) return false;
+    try {
+        if (typeof item.isSelected === "function") {
+            return item.isSelected() === true;
+        } else if (typeof item.isSelected === "boolean") {
+            return item.isSelected === true;
+        } else if (typeof item.selected === "boolean") {
+            return item.selected === true;
+        }
+    } catch(eSel) {}
+    return false;
+}
+
+$._PPP_.getSelectedClipsInfo = function() {
     try {
         var seq = null;
         if (app && app.project) {
@@ -385,75 +399,76 @@ $._PPP_.getSequenceClips = function() {
         }
 
         if (!seq) {
-            return "ERR|Could not read active sequence.";
+            return "ERR|No active sequence found.";
         }
 
-        var clipsList = [];
-        var clipIdCounter = 0;
+        var selectedClips = [];
+        var seenMediaMap = {};
 
-        function scanTrackForClips(tracks, typePrefix) {
+        function scanTrackForSelection(tracks, typePrefix) {
             if (!tracks) return;
             for (var t = 0; t < tracks.numTracks; t++) {
                 var track = tracks[t];
                 if (!track || !track.clips) continue;
                 for (var c = 0; c < track.clips.numItems; c++) {
                     var item = track.clips[c];
-                    if (!item || !item.projectItem) continue;
-                    var mp = item.projectItem.getMediaPath ? item.projectItem.getMediaPath() : "";
-                    if (!mp || mp.length === 0) continue;
+                    if (!item) continue;
+                    if (isTrackItemSelected(item)) {
+                        var mp = (item.projectItem && item.projectItem.getMediaPath) ? item.projectItem.getMediaPath() : "";
+                        var cStart = item.start ? parseFloat(item.start.seconds) : 0;
+                        var cEnd = item.end ? parseFloat(item.end.seconds) : 0;
+                        var cIn = item.inPoint ? parseFloat(item.inPoint.seconds) : 0;
+                        var dur = cEnd - cStart;
 
-                    var f = new File(mp);
-                    if (!f.exists) continue;
-
-                    var cStart = item.start ? parseFloat(item.start.seconds) : 0;
-                    var cEnd = item.end ? parseFloat(item.end.seconds) : 0;
-                    var cIn = item.inPoint ? parseFloat(item.inPoint.seconds) : 0;
-                    var dur = cEnd - cStart;
-
-                    if (dur > 0.05) {
-                        var trackName = typePrefix + (t + 1);
-                        var clipName = item.name || item.projectItem.name || ("Clip_" + (clipIdCounter + 1));
-
-                        clipsList.push({
-                            index: clipIdCounter,
-                            trackIndex: t,
-                            trackType: typePrefix === "A" ? "audio" : "video",
-                            trackName: trackName,
-                            name: clipName,
-                            start: Math.round(cStart * 1000) / 1000,
-                            end: Math.round(cEnd * 1000) / 1000,
-                            duration: Math.round(dur * 1000) / 1000,
-                            inPoint: Math.round(cIn * 1000) / 1000,
-                            mediaPath: mp.replace(/\\/g, "/")
-                        });
-                        clipIdCounter++;
+                        if (dur > 0.05) {
+                            var key = typePrefix + "_" + Math.round(cStart * 100) + "_" + Math.round(cEnd * 100);
+                            if (!seenMediaMap[key]) {
+                                seenMediaMap[key] = true;
+                                selectedClips.push({
+                                    trackName: typePrefix + (t + 1),
+                                    trackIndex: t,
+                                    trackType: typePrefix === "A" ? "audio" : "video",
+                                    name: item.name || (item.projectItem ? item.projectItem.name : "Selected_Clip"),
+                                    start: Math.round(cStart * 1000) / 1000,
+                                    end: Math.round(cEnd * 1000) / 1000,
+                                    duration: Math.round(dur * 1000) / 1000,
+                                    inPoint: Math.round(cIn * 1000) / 1000,
+                                    mediaPath: mp.replace(/\\/g, "/")
+                                });
+                            }
+                        }
                     }
                 }
             }
         }
 
-        scanTrackForClips(seq.audioTracks, "A");
-        if (clipsList.length === 0) {
-            scanTrackForClips(seq.videoTracks, "V");
+        scanTrackForSelection(seq.audioTracks, "A");
+        if (selectedClips.length === 0) {
+            scanTrackForSelection(seq.videoTracks, "V");
         }
 
-        // Sort chronologically by sequence timeline start
-        clipsList.sort(function(a, b) {
+        selectedClips.sort(function(a, b) {
             return a.start - b.start;
         });
 
-        // Re-index after sort
-        for (var k = 0; k < clipsList.length; k++) {
-            clipsList[k].index = k;
+        var totalDur = 0;
+        for (var k = 0; k < selectedClips.length; k++) {
+            totalDur += selectedClips[k].duration;
         }
 
-        return "OK|" + stringifyJson(clipsList);
+        var resultObj = {
+            selectedCount: selectedClips.length,
+            totalDuration: Math.round(totalDur * 1000) / 1000,
+            clips: selectedClips
+        };
+
+        return "OK|" + stringifyJson(resultObj);
     } catch(e) {
         return "ERR|" + e.toString();
     }
 };
 
-$._PPP_.exportAudio = function(targetWavPath, selectedClipIndex) {
+$._PPP_.exportAudio = function(targetWavPath, scopeMode) {
     try {
         var seq = null;
         if (app && app.project) {
@@ -468,14 +483,12 @@ $._PPP_.exportAudio = function(targetWavPath, selectedClipIndex) {
             return "ERR|Could not read the active sequence. Make sure a sequence is open.";
         }
 
-        var isSingleClip = (selectedClipIndex !== undefined && selectedClipIndex !== null && selectedClipIndex !== "" && String(selectedClipIndex) !== "all" && parseInt(selectedClipIndex, 10) >= 0);
-
-        // Collect audio and video clips
+        var isSelectedScope = (scopeMode === "selected");
         var clipsToProcess = [];
         var minClipStart = 999999;
         var maxClipEnd = 0;
 
-        function scanTrackClips(tracks, typePrefix) {
+        function scanTrackClips(tracks, typePrefix, onlySelected) {
             if (!tracks) return;
             for (var t = 0; t < tracks.numTracks; t++) {
                 var track = tracks[t];
@@ -483,6 +496,11 @@ $._PPP_.exportAudio = function(targetWavPath, selectedClipIndex) {
                 for (var c = 0; c < track.clips.numItems; c++) {
                     var item = track.clips[c];
                     if (!item || !item.projectItem) continue;
+
+                    if (onlySelected && !isTrackItemSelected(item)) {
+                        continue;
+                    }
+
                     var mp = item.projectItem.getMediaPath ? item.projectItem.getMediaPath() : "";
                     if (!mp || mp.length === 0) continue;
 
@@ -511,14 +529,26 @@ $._PPP_.exportAudio = function(targetWavPath, selectedClipIndex) {
             }
         }
 
-        // Scan audio tracks first, fallback to video tracks if no audio clips found
-        scanTrackClips(seq.audioTracks, "A");
-        if (clipsToProcess.length === 0) {
-            scanTrackClips(seq.videoTracks, "V");
-        }
+        if (isSelectedScope) {
+            // Scan only selected clips
+            scanTrackClips(seq.audioTracks, "A", true);
+            if (clipsToProcess.length === 0) {
+                scanTrackClips(seq.videoTracks, "V", true);
+            }
 
-        if (clipsToProcess.length === 0) {
-            return "ERR|No valid audio or video clips found in active sequence.";
+            if (clipsToProcess.length === 0) {
+                return "ERR|No clips are currently selected on the sequence timeline. Please select one or more clips in Premiere Pro.";
+            }
+        } else {
+            // Scan all clips
+            scanTrackClips(seq.audioTracks, "A", false);
+            if (clipsToProcess.length === 0) {
+                scanTrackClips(seq.videoTracks, "V", false);
+            }
+
+            if (clipsToProcess.length === 0) {
+                return "ERR|No valid audio or video clips found in active sequence.";
+            }
         }
 
         // Sort chronologically by sequence start time
@@ -530,24 +560,29 @@ $._PPP_.exportAudio = function(targetWavPath, selectedClipIndex) {
         var exportEnd = 0;
         var activeManifestClips = [];
 
-        if (isSingleClip) {
-            var targetIdx = parseInt(selectedClipIndex, 10);
-            if (targetIdx < 0 || targetIdx >= clipsToProcess.length) {
-                targetIdx = 0;
+        if (isSelectedScope) {
+            exportStart = clipsToProcess[0].clipStart;
+            exportEnd = clipsToProcess[clipsToProcess.length - 1].clipEnd;
+            for (var k = 0; k < clipsToProcess.length; k++) {
+                if (clipsToProcess[k].clipEnd > exportEnd) {
+                    exportEnd = clipsToProcess[k].clipEnd;
+                }
             }
-            var targetClip = clipsToProcess[targetIdx];
-            exportStart = targetClip.clipStart;
-            exportEnd = targetClip.clipEnd;
-            var clipDur = targetClip.clipEnd - targetClip.clipStart;
 
-            activeManifestClips.push({
-                clipName: targetClip.clipName,
-                trackIndex: targetClip.trackIndex,
-                mediaPath: targetClip.mediaPath,
-                mediaCutIn: Math.round(targetClip.clipIn * 1000) / 1000,
-                cutDuration: Math.round(clipDur * 1000) / 1000,
-                relSeqStart: 0
-            });
+            for (var i = 0; i < clipsToProcess.length; i++) {
+                var sItem = clipsToProcess[i];
+                var sDur = sItem.clipEnd - sItem.clipStart;
+                var sRelStart = sItem.clipStart - exportStart;
+
+                activeManifestClips.push({
+                    clipName: sItem.clipName,
+                    trackIndex: sItem.trackIndex,
+                    mediaPath: sItem.mediaPath,
+                    mediaCutIn: Math.round(sItem.clipIn * 1000) / 1000,
+                    cutDuration: Math.round(sDur * 1000) / 1000,
+                    relSeqStart: Math.round(sRelStart * 1000) / 1000
+                });
+            }
         } else {
             // Determine export range for full sequence
             var inPoint = 0;

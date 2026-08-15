@@ -1912,7 +1912,8 @@ document.addEventListener("DOMContentLoaded", function () {
             var btnTranscribe = document.getElementById("btnTranscribe");
 
             var selScope = document.getElementById("selectTranscribeScope");
-            var lblClipBadge = document.getElementById("lblClipCountBadge");
+            var lblScopeBadge = document.getElementById("lblScopeBadge");
+            var lblScopeStatus = document.getElementById("lblScopeStatus");
 
             if (this.isTranscribing) {
                 this.status = "Transcribing";
@@ -1939,11 +1940,12 @@ document.addEventListener("DOMContentLoaded", function () {
                     lblBadge.innerText = "No Sequence";
                     lblBadge.className = "badge-status no-sequence";
                 }
-                if (selScope) {
-                    selScope.innerHTML = '<option value="all" disabled>No sequence</option>';
-                    selScope.disabled = true;
+                if (selScope) selScope.disabled = true;
+                if (lblScopeBadge) lblScopeBadge.innerText = "No Sequence";
+                if (lblScopeStatus) {
+                    lblScopeStatus.innerText = "No active sequence in Premiere Pro.";
+                    lblScopeStatus.style.color = "var(--text-secondary)";
                 }
-                if (lblClipBadge) lblClipBadge.innerText = "No sequence";
                 if (btnTranscribe) {
                     btnTranscribe.disabled = true;
                     btnTranscribe.innerText = "Transcribe Sequence (No Sequence)";
@@ -1979,73 +1981,82 @@ document.addEventListener("DOMContentLoaded", function () {
                     lblBadge.innerText = "No Media";
                     lblBadge.className = "badge-status no-sequence";
                 }
-                if (selScope) {
-                    selScope.innerHTML = '<option value="all" disabled>No media clips</option>';
-                    selScope.disabled = true;
+                if (selScope) selScope.disabled = true;
+                if (lblScopeBadge) lblScopeBadge.innerText = "0 Clips";
+                if (lblScopeStatus) {
+                    lblScopeStatus.innerText = "No media clips found on the active sequence.";
+                    lblScopeStatus.style.color = "var(--text-secondary)";
                 }
-                if (lblClipBadge) lblClipBadge.innerText = "0 clips";
                 if (btnTranscribe) {
                     btnTranscribe.disabled = true;
                     btnTranscribe.innerText = "Transcribe Sequence (No Media Found)";
                 }
             } else {
-                // Populate Transcription Scope dropdown with clips
-                if (typeof ExtendScriptBridge !== "undefined" && ExtendScriptBridge.getSequenceClips) {
-                    ExtendScriptBridge.getSequenceClips(function(clipsRes) {
-                        if (clipsRes && clipsRes.success && clipsRes.clips && clipsRes.clips.length > 0) {
-                            if (selScope) {
-                                var prevVal = selScope.value;
-                                var html = '<option value="all">Entire Active Sequence (' + (res.duration || 0).toFixed(1) + 's)</option>';
-                                for (var c = 0; c < clipsRes.clips.length; c++) {
-                                    var cl = clipsRes.clips[c];
-                                    var clLabel = '[' + cl.trackName + '] ' + cl.name + ' (' + cl.start.toFixed(1) + 's - ' + cl.end.toFixed(1) + 's)';
-                                    html += '<option value="' + cl.index + '">' + clLabel + '</option>';
+                if (selScope) selScope.disabled = false;
+                var self = this;
+                var currentScopeMode = selScope ? selScope.value : "all";
+
+                if (typeof ExtendScriptBridge !== "undefined" && ExtendScriptBridge.getSelectedClipsInfo) {
+                    ExtendScriptBridge.getSelectedClipsInfo(function(selRes) {
+                        var selectedCount = (selRes && selRes.success) ? (selRes.selectedCount || 0) : 0;
+                        var selectedDur = (selRes && selRes.success) ? (selRes.totalDuration || 0) : 0;
+
+                        if (currentScopeMode === "selected") {
+                            if (selectedCount === 0) {
+                                if (lblScopeBadge) lblScopeBadge.innerText = "0 Selected";
+                                if (lblScopeStatus) {
+                                    lblScopeStatus.innerText = "No clip selected in timeline. Select one or more clips in the Premiere timeline.";
+                                    lblScopeStatus.style.color = "var(--warning)";
                                 }
-                                selScope.innerHTML = html;
-                                if (prevVal && (prevVal === "all" || parseInt(prevVal, 10) < clipsRes.clips.length)) {
-                                    selScope.value = prevVal;
-                                } else {
-                                    selScope.value = "all";
+                                if (btnTranscribe) {
+                                    btnTranscribe.disabled = true;
+                                    btnTranscribe.innerText = "Select Clip(s) in Premiere Timeline";
                                 }
-                                selScope.disabled = false;
-                            }
-                            if (lblClipBadge) {
-                                lblClipBadge.innerText = clipsRes.clips.length + (clipsRes.clips.length === 1 ? " clip" : " clips");
+                            } else {
+                                var countLabel = selectedCount === 1 ? "1 clip selected" : selectedCount + " clips selected";
+                                if (lblScopeBadge) lblScopeBadge.innerText = countLabel;
+                                if (lblScopeStatus) {
+                                    lblScopeStatus.innerText = "Scope: Selected Clips (" + countLabel + ", " + selectedDur.toFixed(1) + "s total).";
+                                    lblScopeStatus.style.color = "var(--accent)";
+                                }
+                                if (btnTranscribe) {
+                                    btnTranscribe.disabled = false;
+                                    btnTranscribe.innerText = selectedCount === 1 ? "Transcribe Selected Clip" : "Transcribe Selected Clips (" + selectedCount + ")";
+                                }
                             }
                         } else {
-                            if (selScope) {
-                                selScope.innerHTML = '<option value="all">Entire Active Sequence (' + (res.duration || 0).toFixed(1) + 's)</option>';
-                                selScope.disabled = false;
+                            // "all"
+                            if (lblScopeBadge) lblScopeBadge.innerText = "All Clips (" + res.clipCount + ")";
+                            if (lblScopeStatus) {
+                                lblScopeStatus.innerText = "Scope: All Clips (transcribing all " + res.clipCount + " media clips across sequence).";
+                                lblScopeStatus.style.color = "var(--text-secondary)";
                             }
-                            if (lblClipBadge) lblClipBadge.innerText = "Entire Sequence";
+                            if (btnTranscribe) {
+                                btnTranscribe.disabled = false;
+                                if (self.transcribedSequenceKey === newKey && window.UltraTranscript && window.UltraTranscript.words && window.UltraTranscript.words.length > 0) {
+                                    btnTranscribe.innerText = "Re-transcribe Sequence";
+                                } else {
+                                    btnTranscribe.innerText = "Transcribe Sequence";
+                                }
+                            }
+                        }
+
+                        if (self.transcribedSequenceKey === newKey && window.UltraTranscript && window.UltraTranscript.words && window.UltraTranscript.words.length > 0) {
+                            self.status = "Transcribed";
+                            if (lblStatus) lblStatus.innerText = "Transcribed";
+                            if (lblBadge) {
+                                lblBadge.innerText = "Transcribed";
+                                lblBadge.className = "badge-status transcribed";
+                            }
+                        } else {
+                            self.status = "Untranscribed";
+                            if (lblStatus) lblStatus.innerText = "Untranscribed";
+                            if (lblBadge) {
+                                lblBadge.innerText = "Untranscribed";
+                                lblBadge.className = "badge-status untranscribed";
+                            }
                         }
                     });
-                }
-
-                var isScopeSingle = selScope && selScope.value !== "all";
-
-                if (this.transcribedSequenceKey === newKey && window.UltraTranscript && window.UltraTranscript.words && window.UltraTranscript.words.length > 0) {
-                    this.status = "Transcribed";
-                    if (lblStatus) lblStatus.innerText = "Transcribed";
-                    if (lblBadge) {
-                        lblBadge.innerText = "Transcribed";
-                        lblBadge.className = "badge-status transcribed";
-                    }
-                    if (btnTranscribe) {
-                        btnTranscribe.disabled = false;
-                        btnTranscribe.innerText = isScopeSingle ? "Transcribe Selected Clip" : "Re-transcribe Sequence";
-                    }
-                } else {
-                    this.status = "Untranscribed";
-                    if (lblStatus) lblStatus.innerText = "Untranscribed";
-                    if (lblBadge) {
-                        lblBadge.innerText = "Untranscribed";
-                        lblBadge.className = "badge-status untranscribed";
-                    }
-                    if (btnTranscribe) {
-                        btnTranscribe.disabled = false;
-                        btnTranscribe.innerText = isScopeSingle ? "Transcribe Selected Clip" : "Transcribe Sequence";
-                    }
                 }
             }
         },
@@ -2214,13 +2225,8 @@ document.addEventListener("DOMContentLoaded", function () {
     var selTransScope = document.getElementById("selectTranscribeScope");
     if (selTransScope) {
         selTransScope.addEventListener("change", function () {
-            var btnTrans = document.getElementById("btnTranscribe");
-            if (btnTrans && !btnTrans.disabled) {
-                if (selTransScope.value === "all") {
-                    btnTrans.innerText = (SequenceStateManager.transcribedSequenceKey === SequenceStateManager.currentKey) ? "Re-transcribe Sequence" : "Transcribe Sequence";
-                } else {
-                    btnTrans.innerText = "Transcribe Selected Clip";
-                }
+            if (window.SequenceStateManager && window.SequenceStateManager.lastResult) {
+                window.SequenceStateManager.updateUI(window.SequenceStateManager.lastResult);
             }
         });
     }

@@ -66,16 +66,20 @@
             </div>
         </div>
 
-        <!-- Transcription Scope (Sequence or Clip Selector) -->
+        <!-- Transcription Scope Card -->
         <div class="card">
             <div class="label-row">
                 <span class="card-title">Transcription Scope</span>
-                <span id="lblClipCountBadge" class="val-badge" style="font-size: 10px; color: var(--text-muted);">Entire Sequence</span>
+                <span id="lblScopeBadge" class="val-badge" style="font-size: 10px; color: var(--text-muted);">All Clips</span>
             </div>
-            <div class="form-group">
+            <div class="form-group" style="margin-bottom: 6px;">
                 <select id="selectTranscribeScope">
-                    <option value="all">Entire Active Sequence</option>
+                    <option value="all">All Clips (Full Sequence)</option>
+                    <option value="selected">Selected Clips (Timeline Selection)</option>
                 </select>
+            </div>
+            <div id="lblScopeStatus" style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">
+                Scope: All Clips (Full Sequence)
             </div>
         </div>
 
