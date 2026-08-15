@@ -25,31 +25,63 @@ var ExtendScriptBridge = {
         });
     },
 
-    exportAudio: function(targetPath, callback) {
+    exportAudio: function(targetPath, selectedClipIdx, callback) {
         if (typeof targetPath === "function") {
             callback = targetPath;
+            targetPath = "";
+            selectedClipIdx = "all";
+        } else if (typeof selectedClipIdx === "function") {
+            callback = selectedClipIdx;
+            selectedClipIdx = "all";
         }
+
+        var clipParam = (selectedClipIdx !== undefined && selectedClipIdx !== null && selectedClipIdx !== "") ? String(selectedClipIdx) : "all";
 
         this.loadHost(function(ok, err) {
             if (!ok) {
-                callback({ success: false, error: "Host script failed to load: " + (err || "unknown error") });
+                if (callback) callback({ success: false, error: "Host script failed to load: " + (err || "unknown error") });
                 return;
             }
 
-            ExtendScriptBridge.csInterface.evalScript("$._PPP_.exportAudio()", function(result) {
+            var cmd = '$._PPP_.exportAudio("", "' + clipParam + '")';
+            ExtendScriptBridge.csInterface.evalScript(cmd, function(result) {
                 if (!result || result === "EvalScript error.") {
-                    callback({ success: false, error: "ExtendScript evaluation failed. Result: " + result });
+                    if (callback) callback({ success: false, error: "ExtendScript evaluation failed. Result: " + result });
                     return;
                 }
                 if (result.indexOf("OK|") === 0) {
                     var parts = result.split("|");
                     var aPath = parts[1] || "";
                     var expStart = parseFloat(parts[2]) || 0;
-                    callback({ success: true, audioPath: aPath, exportStart: expStart });
+                    if (callback) callback({ success: true, audioPath: aPath, exportStart: expStart });
                 } else if (result.indexOf("ERR|") === 0) {
-                    callback({ success: false, error: result.substring(4) });
+                    if (callback) callback({ success: false, error: result.substring(4) });
                 } else {
-                    callback({ success: false, error: result });
+                    if (callback) callback({ success: false, error: result });
+                }
+            });
+        });
+    },
+
+    getSequenceClips: function(callback) {
+        this.loadHost(function(ok, err) {
+            if (!ok) {
+                if (callback) callback({ success: false, error: err || "Host script failed to load", clips: [] });
+                return;
+            }
+            ExtendScriptBridge.csInterface.evalScript("$._PPP_.getSequenceClips()", function(res) {
+                if (res && res.indexOf("OK|") === 0) {
+                    try {
+                        var jsonStr = res.substring(3);
+                        var clips = JSON.parse(jsonStr);
+                        if (callback) callback({ success: true, clips: clips });
+                    } catch(eJson) {
+                        if (callback) callback({ success: false, error: "JSON parse error: " + eJson.message, clips: [] });
+                    }
+                } else if (res && res.indexOf("ERR|") === 0) {
+                    if (callback) callback({ success: false, error: res.substring(4), clips: [] });
+                } else {
+                    if (callback) callback({ success: false, error: res || "Unknown response", clips: [] });
                 }
             });
         });

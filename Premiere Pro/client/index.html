@@ -66,6 +66,19 @@
             </div>
         </div>
 
+        <!-- Transcription Scope (Sequence or Clip Selector) -->
+        <div class="card">
+            <div class="label-row">
+                <span class="card-title">Transcription Scope</span>
+                <span id="lblClipCountBadge" class="val-badge" style="font-size: 10px; color: var(--text-muted);">Entire Sequence</span>
+            </div>
+            <div class="form-group">
+                <select id="selectTranscribeScope">
+                    <option value="all">Entire Active Sequence</option>
+                </select>
+            </div>
+        </div>
+
         <!-- Model Selection Card -->
         <div class="card">
             <div class="card-title">Speech Model</div>
@@ -201,7 +214,6 @@
                             <span style="font-size: 10px; color: var(--text-muted);">Speaker:</span>
                             <select id="selectSpeakerFilter" class="speaker-filter-select">
                                 <option value="all">All Speakers</option>
-                                <option value="speaker_1">Speaker 1</option>
                             </select>
                         </div>
                     </div>
@@ -454,26 +466,26 @@
 
     <!-- Import Guide Modal -->
     <div class="modal-overlay" id="importGuideModal" style="display: none;">
-        <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-content" style="max-width: 420px;">
             <div class="modal-header">
                 <span class="modal-title">How to Import Static Transcript</span>
                 <button id="btnCloseImportGuide" class="modal-close-btn">&times;</button>
             </div>
             <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.6;">
                 <ol style="padding-left: 18px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px;">
-                    <li>Select the SOURCE CLIP in Project panel (the media file, not just sequence)</li>
-                    <li>Open <strong>Window &gt; Text</strong></li>
-                    <li>Open <strong>Transcript</strong> tab</li>
-                    <li>Click the <strong>...</strong> menu</li>
-                    <li>Choose <strong>Import &gt; Import Static Transcript</strong></li>
+                    <li>Select the <strong>Source Clip</strong> in Project panel (the media file, not sequence)</li>
+                    <li>Open <strong>Window &gt; Text</strong> and switch to the <strong>Transcript</strong> tab</li>
+                    <li>Click the <strong>...</strong> menu and choose <strong>Import &gt; Import Static Transcript</strong></li>
                     <li>Select the exported JSON file</li>
                 </ol>
-                <div style="margin-top: 10px; padding: 8px; background: rgba(59, 130, 246, 0.08); border-radius: var(--radius-control); border-left: 3px solid var(--accent); color: var(--text-primary); font-size: 10px;">
-                    <strong>Note:</strong> Import Static Transcript attaches directly to the selected source clip in Premiere Pro.
+                <div style="margin-top: 10px; padding: 10px; background: rgba(245, 158, 11, 0.08); border-radius: var(--radius-control); border-left: 3px solid var(--warning); color: var(--text-primary); font-size: 11px; line-height: 1.5;">
+                    <strong style="color: var(--warning);">Important Note on Native Text Editing:</strong><br>
+                    Imported static transcripts in Premiere are for <strong>review and playhead navigation</strong>. Premiere Pro native text-based editing and pause deletion are not reliably enabled for imported static transcripts (Adobe restricts native text cuts to cloud/Sensei generated transcripts).<br><br>
+                    For reliable <strong>text-based editing, pause deletion, filler cuts, and ripple cuts</strong> directly on your sequence timeline, use the <strong>Caption Generator ULTRA</strong> transcript tools.
                 </div>
             </div>
             <div class="modal-actions">
-                <button class="btn-primary" id="btnDismissImportGuide" style="padding: 4px 14px; font-size: 11px;">Got It</button>
+                <button class="btn-primary" id="btnDismissImportGuide" style="padding: 4px 16px; font-size: 11px;">Got It</button>
             </div>
         </div>
     </div>

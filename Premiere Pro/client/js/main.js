@@ -539,7 +539,42 @@ document.addEventListener("DOMContentLoaded", function () {
             this.words = normalizedWords;
             if (this.words.length === 0) return;
 
+            // Extract distinct speakers and populate speaker filter dropdown
+            var speakersFound = {};
+            for (var sIdx = 0; sIdx < normalizedWords.length; sIdx++) {
+                var spk = normalizedWords[sIdx].speaker || "Speaker 1";
+                speakersFound[spk] = true;
+            }
+            var speakerList = Object.keys(speakersFound);
+            this.populateSpeakerFilter(speakerList);
+
             this.rebuildParagraphs();
+        },
+
+        populateSpeakerFilter: function(speakerList) {
+            var sel = document.getElementById("selectSpeakerFilter");
+            if (!sel) return;
+
+            sel.innerHTML = "";
+            var optAll = document.createElement("option");
+            optAll.value = "all";
+            optAll.innerText = "All Speakers";
+            sel.appendChild(optAll);
+
+            if (speakerList && speakerList.length > 0) {
+                for (var i = 0; i < speakerList.length; i++) {
+                    var opt = document.createElement("option");
+                    opt.value = speakerList[i];
+                    opt.innerText = speakerList[i];
+                    sel.appendChild(opt);
+                }
+                sel.disabled = false;
+            } else {
+                sel.disabled = true;
+            }
+
+            this.selectedSpeaker = "all";
+            sel.value = "all";
         },
 
         rebuildParagraphs: function() {
@@ -772,7 +807,11 @@ document.addEventListener("DOMContentLoaded", function () {
                         // Check visibility filters
                         if (isFil && !self.showFillers) continue;
                         if (isCen && !self.showCensored) continue;
-                        if (self.selectedSpeaker !== "all" && token.speaker !== self.selectedSpeaker) continue;
+                        if (self.selectedSpeaker && self.selectedSpeaker !== "all") {
+                            var tSpk = (token.speaker || "Speaker 1").trim().toLowerCase();
+                            var sSpk = (self.selectedSpeaker || "").trim().toLowerCase();
+                            if (tSpk !== sSpk) continue;
+                        }
 
                         var wordSpan = document.createElement("span");
                         wordSpan.className = "transcript-word";
@@ -1872,6 +1911,9 @@ document.addEventListener("DOMContentLoaded", function () {
             var lblBadge = document.getElementById("lblSeqStatusBadge");
             var btnTranscribe = document.getElementById("btnTranscribe");
 
+            var selScope = document.getElementById("selectTranscribeScope");
+            var lblClipBadge = document.getElementById("lblClipCountBadge");
+
             if (this.isTranscribing) {
                 this.status = "Transcribing";
                 if (lblStatus) lblStatus.innerText = "Transcribing";
@@ -1897,6 +1939,11 @@ document.addEventListener("DOMContentLoaded", function () {
                     lblBadge.innerText = "No Sequence";
                     lblBadge.className = "badge-status no-sequence";
                 }
+                if (selScope) {
+                    selScope.innerHTML = '<option value="all" disabled>No sequence</option>';
+                    selScope.disabled = true;
+                }
+                if (lblClipBadge) lblClipBadge.innerText = "No sequence";
                 if (btnTranscribe) {
                     btnTranscribe.disabled = true;
                     btnTranscribe.innerText = "Transcribe Sequence (No Sequence)";
@@ -1932,31 +1979,73 @@ document.addEventListener("DOMContentLoaded", function () {
                     lblBadge.innerText = "No Media";
                     lblBadge.className = "badge-status no-sequence";
                 }
+                if (selScope) {
+                    selScope.innerHTML = '<option value="all" disabled>No media clips</option>';
+                    selScope.disabled = true;
+                }
+                if (lblClipBadge) lblClipBadge.innerText = "0 clips";
                 if (btnTranscribe) {
                     btnTranscribe.disabled = true;
                     btnTranscribe.innerText = "Transcribe Sequence (No Media Found)";
                 }
-            } else if (this.transcribedSequenceKey === newKey && window.UltraTranscript && window.UltraTranscript.words && window.UltraTranscript.words.length > 0) {
-                this.status = "Transcribed";
-                if (lblStatus) lblStatus.innerText = "Transcribed";
-                if (lblBadge) {
-                    lblBadge.innerText = "Transcribed";
-                    lblBadge.className = "badge-status transcribed";
-                }
-                if (btnTranscribe) {
-                    btnTranscribe.disabled = false;
-                    btnTranscribe.innerText = "Re-transcribe Sequence";
-                }
             } else {
-                this.status = "Untranscribed";
-                if (lblStatus) lblStatus.innerText = "Untranscribed";
-                if (lblBadge) {
-                    lblBadge.innerText = "Untranscribed";
-                    lblBadge.className = "badge-status untranscribed";
+                // Populate Transcription Scope dropdown with clips
+                if (typeof ExtendScriptBridge !== "undefined" && ExtendScriptBridge.getSequenceClips) {
+                    ExtendScriptBridge.getSequenceClips(function(clipsRes) {
+                        if (clipsRes && clipsRes.success && clipsRes.clips && clipsRes.clips.length > 0) {
+                            if (selScope) {
+                                var prevVal = selScope.value;
+                                var html = '<option value="all">Entire Active Sequence (' + (res.duration || 0).toFixed(1) + 's)</option>';
+                                for (var c = 0; c < clipsRes.clips.length; c++) {
+                                    var cl = clipsRes.clips[c];
+                                    var clLabel = '[' + cl.trackName + '] ' + cl.name + ' (' + cl.start.toFixed(1) + 's - ' + cl.end.toFixed(1) + 's)';
+                                    html += '<option value="' + cl.index + '">' + clLabel + '</option>';
+                                }
+                                selScope.innerHTML = html;
+                                if (prevVal && (prevVal === "all" || parseInt(prevVal, 10) < clipsRes.clips.length)) {
+                                    selScope.value = prevVal;
+                                } else {
+                                    selScope.value = "all";
+                                }
+                                selScope.disabled = false;
+                            }
+                            if (lblClipBadge) {
+                                lblClipBadge.innerText = clipsRes.clips.length + (clipsRes.clips.length === 1 ? " clip" : " clips");
+                            }
+                        } else {
+                            if (selScope) {
+                                selScope.innerHTML = '<option value="all">Entire Active Sequence (' + (res.duration || 0).toFixed(1) + 's)</option>';
+                                selScope.disabled = false;
+                            }
+                            if (lblClipBadge) lblClipBadge.innerText = "Entire Sequence";
+                        }
+                    });
                 }
-                if (btnTranscribe) {
-                    btnTranscribe.disabled = false;
-                    btnTranscribe.innerText = "Transcribe Sequence";
+
+                var isScopeSingle = selScope && selScope.value !== "all";
+
+                if (this.transcribedSequenceKey === newKey && window.UltraTranscript && window.UltraTranscript.words && window.UltraTranscript.words.length > 0) {
+                    this.status = "Transcribed";
+                    if (lblStatus) lblStatus.innerText = "Transcribed";
+                    if (lblBadge) {
+                        lblBadge.innerText = "Transcribed";
+                        lblBadge.className = "badge-status transcribed";
+                    }
+                    if (btnTranscribe) {
+                        btnTranscribe.disabled = false;
+                        btnTranscribe.innerText = isScopeSingle ? "Transcribe Selected Clip" : "Re-transcribe Sequence";
+                    }
+                } else {
+                    this.status = "Untranscribed";
+                    if (lblStatus) lblStatus.innerText = "Untranscribed";
+                    if (lblBadge) {
+                        lblBadge.innerText = "Untranscribed";
+                        lblBadge.className = "badge-status untranscribed";
+                    }
+                    if (btnTranscribe) {
+                        btnTranscribe.disabled = false;
+                        btnTranscribe.innerText = isScopeSingle ? "Transcribe Selected Clip" : "Transcribe Sequence";
+                    }
                 }
             }
         },
@@ -2119,6 +2208,20 @@ document.addEventListener("DOMContentLoaded", function () {
     if (btnTranscribe) {
         btnTranscribe.addEventListener("click", function () {
             runTranscribeWorkflow();
+        });
+    }
+
+    var selTransScope = document.getElementById("selectTranscribeScope");
+    if (selTransScope) {
+        selTransScope.addEventListener("change", function () {
+            var btnTrans = document.getElementById("btnTranscribe");
+            if (btnTrans && !btnTrans.disabled) {
+                if (selTransScope.value === "all") {
+                    btnTrans.innerText = (SequenceStateManager.transcribedSequenceKey === SequenceStateManager.currentKey) ? "Re-transcribe Sequence" : "Transcribe Sequence";
+                } else {
+                    btnTrans.innerText = "Transcribe Selected Clip";
+                }
+            }
         });
     }
 
@@ -2530,7 +2633,10 @@ function runTranscribeWorkflow() {
                 if (isTranscriptionCancelled) return;
                 var tempAudioPath = getTempAudioPath();
 
-                ExtendScriptBridge.exportAudio(tempAudioPath, function (exportRes) {
+                var selScopeEl = document.getElementById("selectTranscribeScope");
+                var selectedScope = selScopeEl ? selScopeEl.value : "all";
+
+                ExtendScriptBridge.exportAudio(tempAudioPath, selectedScope, function (exportRes) {
                     if (isTranscriptionCancelled) return;
 
                     // Check E: No active sequence / comp media
@@ -2543,7 +2649,8 @@ function runTranscribeWorkflow() {
                             window.SequenceStateManager.isTranscribing = false;
                             window.SequenceStateManager.poll();
                         }
-                        showAlertModal("No Sequence Media", "No audio/video found on the active sequence.");
+                        var errMsg = (exportRes && exportRes.error) ? exportRes.error : "No audio/video found on the active sequence or selected clip.";
+                        showAlertModal("Media Export Notice", errMsg);
                         return;
                     }
 
