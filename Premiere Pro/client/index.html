@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caption Generator ULTRA</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/lib/CSInterface.js"></script>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="app-header">
+        <div class="brand">
+            <img src="../logo.png" alt="Logo" id="appLogo">
+            <span class="brand-title">Caption Generator ULTRA</span>
+        </div>
+        <span class="badge" id="hostBadge" style="background: #e65100; color: white;">ULTRA</span>
+        <span style="font-size: 9px; color: var(--text-secondary); font-family: monospace; opacity: 0.6; margin-left: 4px;">v2.0.0</span>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+        <button class="tab-btn active" data-tab="tab-transcribe">Transcript</button>
+        <button class="tab-btn" data-tab="tab-editor">Captions</button>
+        <button class="tab-btn" data-tab="tab-settings">Settings</button>
+    </nav>
+
+    <!-- Tab 1: Transcript -->
+    <main id="tab-transcribe" class="tab-content active">
+        
+        <div class="card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color);">
+            <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>Active Sequence</span>
+                <span id="lblSeqStatusBadge" class="style-badge" style="font-size: 10px; padding: 2px 6px;">Checking...</span>
+            </div>
+            <div id="sequenceInfoContainer" style="display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--text-secondary);">
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Name:</span>
+                    <span id="lblActiveSeqName" style="color: var(--text-primary); font-weight: 600;">Checking...</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Duration:</span>
+                    <span id="lblActiveSeqDur" style="color: var(--text-primary); font-weight: 600;">0.00s</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Media Clips:</span>
+                    <span id="lblActiveSeqClips" style="color: var(--text-primary); font-weight: 600;">0</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Status:</span>
+                    <span id="lblActiveSeqStatus" style="color: var(--text-primary); font-weight: 600;">Checking...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Model Selection</div>
+            <div class="form-group">
+                <label for="selectModel">Speech Model:</label>
+                <select id="selectModel">
+                    <option value="base">Base (Fast / Standard Accuracy - 145MB)</option>
+                    <option value="small">Small (Balanced Speed & Accuracy - 480MB)</option>
+                    <option value="medium">Medium (High Accuracy - 1.5GB)</option>
+                    <option value="large-v3">Large-v3 (Maximum Accuracy - 3GB)</option>
+                    <option value="tiny">Tiny (Fastest / Low Accuracy - 75MB)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Transcription Settings</div>
+            
+            <!-- Max Characters -->
+            <div class="form-group">
+                <div class="label-row">
+                    <label for="sliderMaxChars">Max Characters Per Line:</label>
+                    <div class="badge-group">
+                        <span class="val-badge" id="lblMaxCharsVal">37</span>
+                        <span class="reset-icon" id="resetMaxChars" title="Reset to default (37)">↻</span>
+                    </div>
+                </div>
+                <input type="range" id="sliderMaxChars" min="15" max="80" value="37">
+            </div>
+
+            <!-- Max Duration -->
+            <div class="form-group">
+                <div class="label-row">
+                    <label for="sliderMaxDur">Max Duration (Seconds):</label>
+                    <div class="badge-group">
+                        <span class="val-badge" id="lblMaxDurVal">3.0s</span>
+                        <span class="reset-icon" id="resetMaxDur" title="Reset to default (3.0s)">↻</span>
+                    </div>
+                </div>
+                <input type="range" id="sliderMaxDur" min="10" max="100" value="30">
+            </div>
+
+            <!-- Gap Frames -->
+            <div class="form-group">
+                <div class="label-row">
+                    <label for="sliderGapFrames">Gap (Frames):</label>
+                    <div class="badge-group">
+                        <span class="val-badge" id="lblGapFramesVal">0 frames</span>
+                        <span class="reset-icon" id="resetGapFrames" title="Reset to default (0)">↻</span>
+                    </div>
+                </div>
+                <input type="range" id="sliderGapFrames" min="0" max="10" value="0">
+            </div>
+
+            <!-- Line Mode -->
+            <div class="form-group">
+                <label>Line Mode:</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="lineMode" value="double" checked>
+                        <span>Double Lines</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="lineMode" value="single">
+                        <span>Single Line</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Language & Translation</div>
+            <div class="form-group">
+                <label for="inputSourceLang">Source Audio Language:</label>
+                <div class="search-select" id="containerSourceLang">
+                    <input type="text" id="inputSourceLang" class="search-select-input" value="Auto (Detect Automatically)" placeholder="Search language..." readonly>
+                    <input type="hidden" id="selectSourceLang" value="auto">
+                    <div class="search-select-dropdown" id="dropdownSourceLang">
+                        <input type="text" class="search-select-filter" placeholder="Type language name...">
+                        <div class="search-select-options"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="inputTargetLang">Translate To:</label>
+                <div class="search-select" id="containerTargetLang">
+                    <input type="text" id="inputTargetLang" class="search-select-input" value="None (Original Language)" placeholder="Search translation..." readonly>
+                    <input type="hidden" id="selectTargetLang" value="none">
+                    <div class="search-select-dropdown" id="dropdownTargetLang">
+                        <input type="text" class="search-select-filter" placeholder="Type target language...">
+                        <div class="search-select-options"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">AI Options</div>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkRemoveFillers" checked>
+                    <span>Remove Filler Words ("um", "uh", "like")</span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkVersioning" checked>
+                    <span>Store Version Folders (PROJECT_NAME_VER_x)</span>
+                </label>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+            <button class="btn-primary" id="btnTranscribe" style="flex: 3;">
+                Transcribe Sequence
+            </button>
+            <button class="btn-secondary" id="btnCancelTranscribe" style="flex: 1; display: none; background-color: #dc3545; color: white;">
+                Cancel
+            </button>
+        </div>
+
+        <div id="transcribeProgressContainer" style="display: none; margin-top: 15px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;" id="transcribeStatusText">Processing...</div>
+            <div style="width: 100%; background-color: var(--bg-dark); border-radius: 4px; overflow: hidden; height: 6px; border: 1px solid var(--border-color);">
+                <div id="transcribeProgressBar" style="width: 0%; height: 100%; background-color: var(--accent-blue); transition: width 0.3s ease;"></div>
+            </div>
+            <!-- Skeleton lines -->
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px; opacity: 0.5;">
+                <div style="height: 8px; background: var(--bg-dark); border-radius: 4px; width: 100%;"></div>
+                <div style="height: 8px; background: var(--bg-dark); border-radius: 4px; width: 85%;"></div>
+                <div style="height: 8px; background: var(--bg-dark); border-radius: 4px; width: 60%;"></div>
+            </div>
+        </div>
+
+        <div id="transcribeSuccessContainer" style="display: none; margin-top: 15px;">
+            <!-- Interactive Transcript Viewer -->
+            <div class="transcript-viewer-card">
+                <div class="transcript-header-row">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-weight: 700; color: var(--text-primary);">Interactive Transcript</span>
+                        <span id="lblTranscriptStats" style="color: var(--accent-blue); font-weight: 600; font-size: 10px;">0 words • 0 pauses • 0 paragraphs</span>
+                    </div>
+                    <div>
+                        <button class="btn-three-dot" id="btnTranscriptMenu" title="Transcript Menu">...</button>
+                        <div class="transcript-dropdown-menu" id="transcriptDropdownMenu">
+                            <button class="dropdown-menu-item" id="menuDeleteAllPauses" style="color: #ffc107;">Delete All Pauses...</button>
+                            <button class="dropdown-menu-item" id="menuDeleteAllFillers" style="color: #ce93d8;">Delete All Fillers...</button>
+                            <div class="dropdown-menu-divider"></div>
+                            <button class="dropdown-menu-item" id="menuExportTXT">Export Transcript TXT</button>
+                            <button class="dropdown-menu-item" id="menuExportJSON">Export Transcript JSON (Internal)</button>
+                            <button class="dropdown-menu-item" id="menuImportJSON">Import Transcript JSON (Internal)</button>
+                            <div class="dropdown-menu-divider"></div>
+                            <button class="dropdown-menu-item" id="menuViewOptions">Transcript View Options</button>
+                            <button class="dropdown-menu-item" id="menuCensoredWords">Censored Words List</button>
+                            <div class="dropdown-menu-divider"></div>
+                            <button class="dropdown-menu-item" id="menuToggleAutoScroll">
+                                <span>Auto-Scroll Playhead</span>
+                                <span id="lblAutoScrollCheck" style="font-weight: 700;">OFF</span>
+                            </button>
+                            <button class="dropdown-menu-item" id="menuToggleSpellCheck">
+                                <span>Spell Check</span>
+                                <span id="lblSpellCheckCheck" style="font-weight: 700;">ON</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search & Filters Toolbar -->
+                <div class="transcript-toolbar">
+                    <div class="transcript-search-row">
+                        <div class="transcript-search-input-wrap">
+                            <input type="text" id="txtTranscriptSearch" class="transcript-search-input" placeholder="Search words in transcript...">
+                            <button class="search-clear-btn" id="btnClearSearch" style="display: none;">&times;</button>
+                        </div>
+                        <button class="search-option-btn" id="btnSearchCase" title="Match Case [Aa]">Aa</button>
+                        <button class="search-option-btn" id="btnSearchWholeWord" title="Whole Word [W]">W</button>
+                        <button class="search-option-btn" id="btnToggleReplace" title="Toggle Replace Bar">Replace</button>
+                        <span class="search-matches-label" id="lblSearchMatches">0 matches</span>
+                    </div>
+
+                    <!-- Replace Bar -->
+                    <div class="transcript-search-row" id="rowTranscriptReplace" style="display: none;">
+                        <div class="transcript-search-input-wrap">
+                            <input type="text" id="txtTranscriptReplace" class="transcript-search-input" placeholder="Replace with...">
+                        </div>
+                        <button class="btn-secondary" id="btnReplaceOne" style="padding: 3px 8px; font-size: 10px;">Replace</button>
+                        <button class="btn-secondary" id="btnReplaceAll" style="padding: 3px 8px; font-size: 10px;">Replace All</button>
+                    </div>
+
+                    <div class="filter-pills-row">
+                        <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">Filters:</span>
+                        <div class="filter-pill" id="pillFilterFillers" data-filter="filler">Fillers</div>
+                        <div class="filter-pill" id="pillFilterCensored" data-filter="censored">Censored</div>
+                        <div class="filter-pill active active-pauses" id="pillFilterPauses" data-filter="pauses">Pauses</div>
+                        <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
+                            <span style="font-size: 10px; color: var(--text-secondary);">Speaker:</span>
+                            <select id="selectSpeakerFilter" class="speaker-filter-select">
+                                <option value="all">All Speakers</option>
+                                <option value="speaker_1">Speaker 1</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Text Selection Action Bar -->
+                <div id="transcriptSelectionBar" style="display: none; background: rgba(13, 110, 253, 0.15); border: 1px solid var(--accent-blue); border-radius: 4px; padding: 4px 8px; margin-bottom: 6px; justify-content: space-between; align-items: center;">
+                    <span id="lblSelectionStats" style="font-size: 10px; font-weight: 600; color: #4da3ff;">0 words selected (0.00s)</span>
+                    <div style="display: flex; gap: 6px;">
+                        <button id="btnRippleCutSelection" class="btn-primary" style="padding: 2px 8px; font-size: 10px; background: #dc3545; font-weight: 600;">Ripple Cut Selection</button>
+                        <button id="btnClearSelection" class="btn-secondary" style="padding: 2px 6px; font-size: 10px;">Clear</button>
+                    </div>
+                </div>
+
+                <div id="transcriptBody" class="transcript-body" spellcheck="true">
+                    <!-- Dynamic paragraphs & word tokens -->
+                </div>
+            </div>
+
+            <!-- Premiere Pro Integration Exports -->
+            <div class="card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); margin-top: 10px; padding: 12px;">
+                <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 6px; font-size: 12px;">Premiere Pro Integration</div>
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;">
+                    <button class="btn-primary" id="btnExportStatic" style="width: 100%; font-weight: 600;">
+                        Export Premiere Transcript (.json)
+                    </button>
+                    <button class="btn-secondary" id="btnExportTXT" style="width: 100%;">
+                        Export Plain Text (.txt)
+                    </button>
+                </div>
+                <div style="text-align: center;">
+                    <a href="#" id="linkHowToImport" style="color: var(--accent-blue); font-size: 11px; text-decoration: none; font-weight: 600;">How to import into Premiere Text panel?</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Tab 2: Subtitle Editor -->
+    <main id="tab-editor" class="tab-content">
+        <div class="editor-container" style="flex: 1; display: flex; flex-direction: column;">
+            
+            <div class="editor-toolbar" style="margin-top: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-weight: 700;" id="cueCounter">0 Subtitles</span>
+                    <span id="styleBadge" class="style-badge">Legacy Subtitles</span>
+                </div>
+            </div>
+
+            <div class="cue-list" id="cueList" style="flex: 1;">
+                <div style="text-align: center; color: var(--text-secondary); margin-top: 30px; padding: 20px 15px; background: var(--bg-dark); border: 1px dashed var(--border-color); border-radius: 6px; font-size: 11px; line-height: 1.6;">
+                    <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px; font-size: 12px;">No transcript data.</div>
+                    <div>Go to the Transcribe tab and click 'Transcribe Sequence' to generate words.</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button class="btn-primary" id="btnApplyEdits" style="flex: 2;">
+                Create Subtitles
+            </button>
+            <button class="btn-secondary" id="btnExportSRT" style="flex: 1;">
+                Export .SRT
+            </button>
+        </div>
+    </main>
+
+    <!-- Tab 3: Settings -->
+    <main id="tab-settings" class="tab-content">
+        <div class="card">
+            <div class="card-title">License</div>
+            <div class="form-group" style="margin-bottom: 8px;">
+                <label for="licenseKeyInput">License Key:</label>
+                <input type="text" id="licenseKeyInput" placeholder="XXXX-XXXX-XXXX-XXXX" style="width: 100%; background-color: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 8px; font-size: 11px; font-family: monospace; border-radius: 4px; outline: none; margin-top: 4px; box-sizing: border-box;">
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <button class="btn-primary" id="btnActivateLicense" style="flex: 1; font-size: 11px; padding: 6px;">Activate License</button>
+                <button class="btn-secondary" id="btnDeactivateLicense" style="flex: 1; font-size: 11px; padding: 6px;">Deactivate This Computer</button>
+            </div>
+            <div style="font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                <span>Status:</span>
+                <span id="licenseStatus" style="font-weight: 600; color: var(--text-primary);">Checking...</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">System & Requirements Status</div>
+            <div id="requirementsListContainer" style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
+                <div style="text-align: center; color: var(--text-secondary); padding: 6px;">Checking system requirements...</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Hardware Acceleration</div>
+            <div class="form-group">
+                <label for="selectHardware">Processing Device:</label>
+                <select id="selectHardware">
+                    <option value="cuda">NVIDIA GPU (CUDA Acceleration)</option>
+                    <option value="cpu">CPU Mode (Universal Compatibility)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Speech Models Manager</div>
+            <div class="model-list" id="modelListContainer">
+                <!-- Dynamically Populated by settings.js -->
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Model Storage Location</div>
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.5;">
+                Speech models (.pt) are downloaded and cached in your user profile:
+                <div id="lblModelPath" style="background-color: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 8px; font-family: monospace; font-size: 10px; color: var(--accent-blue); margin-top: 6px; word-break: break-all; user-select: all;">
+                    %USERPROFILE%/.cache/whisper
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Extension Status</div>
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.6;">
+                Engine: Whisper Fast CLI (CTranslate2)<br>
+                Status: Operational (Offline Mode)<br>
+                Version: 1.0.0 Pro
+            </div>
+        </div>
+    </main>
+
+    <!-- Downloader Modal -->
+    <div class="modal-overlay" id="installerModal" style="display: none;">
+        <div class="modal-content" style="max-width: 360px;">
+            <div class="modal-title" id="installerModalTitle">Downloading Speech Model</div>
+            <div class="status-log" id="statusLog" style="font-weight: 600;">Initializing download...</div>
+            <div id="statusMetrics" style="font-size: 10px; color: var(--accent-blue); font-family: monospace; margin-top: 4px; text-align: center; display: none;"></div>
+            <div class="progress-bar-container" style="margin-top: 8px;">
+                <div class="progress-bar-fill" id="progressFill" style="width: 0%;"></div>
+            </div>
+            <div class="modal-actions-row" style="margin-top: 12px;">
+                <button class="btn-secondary" id="btnModalCancel">Cancel</button>
+                <button class="btn-primary" id="btnModalClose" style="display: none;">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Professional Alert Modal -->
+    <div class="modal-overlay" id="alertModal" style="display: none;">
+        <div class="modal-content" style="max-width: 340px; text-align: left; gap: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                <span id="alertModalTitle" style="font-weight: 700; font-size: 12px; color: var(--text-primary);">Notification</span>
+                <span id="btnAlertClose" style="cursor: pointer; font-size: 14px; color: var(--text-secondary);">&times;</span>
+            </div>
+            <div id="alertModalBody" style="font-size: 11px; color: var(--text-primary); line-height: 1.5; word-break: break-word;"></div>
+            <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+                <button id="btnAlertOk" class="btn-primary" style="padding: 4px 14px; font-size: 11px;">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Guide Modal -->
+    <div class="modal-overlay" id="importGuideModal" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-title">How to Import Static Transcript</div>
+            <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px;">
+                <ol style="padding-left: 20px; margin: 10px 0;">
+                    <li style="margin-bottom: 8px;">Select the SOURCE CLIP in Project panel (the media file, not just sequence)</li>
+                    <li style="margin-bottom: 8px;">Open Window &gt; Text</li>
+                    <li style="margin-bottom: 8px;">Open Transcript tab</li>
+                    <li style="margin-bottom: 8px;">Click the ... menu</li>
+                    <li style="margin-bottom: 8px;">Choose Import &gt; Import Static Transcript</li>
+                    <li style="margin-bottom: 8px;">Select the exported JSON file</li>
+                </ol>
+                <div style="margin-top: 15px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 4px; border-left: 3px solid var(--accent-blue);">
+                    <strong>Important note:</strong> Import Static Transcript attaches to the selected source clip. Select the clip first.
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <button class="btn-primary" id="btnCloseImportGuide" style="padding: 6px 16px;">Got It</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transcript View Options Modal -->
+    <div class="modal-overlay" id="modalViewOptions" style="display: none;">
+        <div class="modal-content" style="max-width: 380px; text-align: left; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">Transcript View Options</span>
+                <span id="btnCloseViewOptions" style="cursor: pointer; font-size: 14px; color: var(--text-secondary);">&times;</span>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <label style="font-size: 11px; font-weight: 600;">Minimum Pause Length</label>
+                    <span id="lblMinPauseVal" style="font-size: 11px; color: var(--accent-blue); font-weight: 700;">0.50s</span>
+                </div>
+                <input type="range" id="rangeMinPauseLength" min="0.10" max="2.00" step="0.01" value="0.50" style="width: 100%;">
+                <div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;">
+                    Pauses equal or greater than this duration appear as [..] in the transcript.
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+                <label class="checkbox-label" style="font-size: 11px;">
+                    <input type="checkbox" id="chkShowFillers" checked>
+                    <span>Show Filler Words</span>
+                </label>
+                <label class="checkbox-label" style="font-size: 11px;">
+                    <input type="checkbox" id="chkShowPauses" checked>
+                    <span>Show Pause Markers [..]</span>
+                </label>
+                <label class="checkbox-label" style="font-size: 11px;">
+                    <input type="checkbox" id="chkShowCensored" checked>
+                    <span>Show Censored Words</span>
+                </label>
+                <label class="checkbox-label" style="font-size: 11px;">
+                    <input type="checkbox" id="chkAutoScrollToggle">
+                    <span>Auto-Scroll Playhead with Timeline</span>
+                </label>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                <button id="btnDoneViewOptions" class="btn-primary" style="padding: 4px 16px; font-size: 11px;">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Censored Words List Modal -->
+    <div class="modal-overlay" id="modalCensoredWords" style="display: none;">
+        <div class="modal-content" style="max-width: 400px; text-align: left; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">Censored Words List</span>
+                <span id="btnCloseCensoredWords" style="cursor: pointer; font-size: 14px; color: var(--text-secondary);">&times;</span>
+            </div>
+
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">
+                Enter comma-separated words to censor and highlight in the transcript editor:
+            </div>
+
+            <textarea id="txtCensoredWordsList" style="width: 100%; height: 90px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius); color: var(--text-primary); padding: 8px; font-size: 11px; font-family: monospace; outline: none; resize: vertical;" placeholder="e.g. damn, shit, fuck, bitch, crap"></textarea>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                <button id="btnResetCensoredWords" class="btn-secondary" style="padding: 4px 10px; font-size: 10px;">Reset Default</button>
+                <button id="btnSaveCensoredWords" class="btn-primary" style="padding: 4px 16px; font-size: 11px;">Save & Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Ripple Cut Modal -->
+    <div class="modal-overlay" id="confirmCutModal" style="display: none;">
+        <div class="modal-content" style="max-width: 360px; text-align: left; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                <span id="confirmCutTitle" style="font-weight: 700; font-size: 13px; color: var(--text-primary);">Confirm Ripple Cut</span>
+                <span id="btnCloseConfirmCut" style="cursor: pointer; font-size: 14px; color: var(--text-secondary);">&times;</span>
+            </div>
+
+            <div id="confirmCutMessage" style="font-size: 11px; color: var(--text-primary); line-height: 1.5; word-break: break-word;"></div>
+
+            <div style="font-size: 10px; color: var(--text-secondary); background: rgba(255, 255, 255, 0.05); padding: 8px 10px; border-radius: 4px; border-left: 3px solid var(--accent-blue); line-height: 1.4;">
+                Premiere Pro sequence timeline will be modified. You can press <strong>Ctrl+Z</strong> (Cmd+Z) in Premiere to undo sequence edits.
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+                <button id="btnCancelCut" class="btn-secondary" style="padding: 4px 12px; font-size: 11px;">Cancel</button>
+                <button id="btnExecuteCut" class="btn-primary" style="padding: 4px 16px; font-size: 11px; background: #dc3545;">Confirm Ripple Cut</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file input for importing internal transcript JSON -->
+    <input type="file" id="fileImportTranscriptJSON" accept=".json" style="display: none;">
+
+    <!-- Scripts -->
+    <script src="js/lib/CSInterface.js"></script>
+    <script src="js/installer.js"></script>
+    <script src="js/license.js"></script>
+    <script src="js/editor.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/extendscript_bridge.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Python & Runtime Caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+whisper_env/
+
+# Model weights, bundled runtime & large binaries
+models/
+runtime/
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+*.bin
+*.pt
+*.onnx
+*.gguf
+
+# Secrets & License Keys
+license.key
+*.key
+.env
+.env.local
+
+# OS & IDE Files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
