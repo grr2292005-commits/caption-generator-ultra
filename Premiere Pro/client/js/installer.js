@@ -45,6 +45,29 @@ var DependencyInstaller = {
         return null;
     },
 
+    getFfmpegExecutable: function() {
+        if (typeof require === "undefined") return "ffmpeg";
+        var fs = require("fs");
+        var path = require("path");
+        var baseDir = this.getExtensionPath();
+
+        var candidates = [
+            path.join(baseDir, "bin", "ffmpeg.exe"),
+            path.join(baseDir, "bin", "ffmpeg"),
+            path.join(baseDir, "runtime", "bin", "ffmpeg.exe"),
+            path.join(baseDir, "runtime", "Scripts", "ffmpeg.exe"),
+            path.join(baseDir, "runtime", "ffmpeg.exe")
+        ];
+
+        for (var i = 0; i < candidates.length; i++) {
+            if (fs.existsSync(candidates[i])) {
+                return candidates[i];
+            }
+        }
+
+        return "ffmpeg";
+    },
+
     checkStatus: function(callback) {
         if (typeof require === "undefined") {
             callback({

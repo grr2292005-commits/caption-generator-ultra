@@ -501,14 +501,17 @@ document.addEventListener("DOMContentLoaded", function () {
         autoScrollTimer: null,
         spellCheckEnabled: true,
 
+        rawSilences: [],
+
         init: function() {
             var self = this;
             this.bindUI();
         },
 
-        buildModel: function(rawWords) {
+        buildModel: function(rawWords, rawSilences) {
             this.words = [];
             this.paragraphs = [];
+            this.rawSilences = Array.isArray(rawSilences) ? rawSilences : (this.rawSilences || []);
             this.pauseCount = 0;
             this.clearSelection();
 
@@ -548,29 +551,88 @@ document.addEventListener("DOMContentLoaded", function () {
             };
 
             var pauses = 0;
+            var minPause = this.minPauseLength;
+            var silences = this.rawSilences || [];
 
             for (var j = 0; j < this.words.length; j++) {
                 var currWord = this.words[j];
                 var prevWord = (j > 0) ? this.words[j - 1] : null;
 
-                if (prevWord) {
-                    var gap = currWord.start - prevWord.end;
+                if (j === 0) {
+                    // Leading silence before the first word
+                    var leadingGap = Math.round(currWord.start * 1000) / 1000;
+                    var leadingSilence = null;
+                    for (var s = 0; s < silences.length; s++) {
+                        if (silences[s].start <= 0.1 && silences[s].end <= currWord.start + 0.1) {
+                            leadingSilence = silences[s];
+                            break;
+                        }
+                    }
+                    var isLeadingPause = (leadingGap >= minPause) || (leadingSilence && leadingSilence.duration >= minPause);
+                    if (isLeadingPause && leadingGap >= 0.05) {
+                        var lStart = 0;
+                        var lEnd = currWord.start;
+                        var lDur = Math.round((lEnd - lStart) * 1000) / 1000;
+                        if (lDur >= minPause) {
+                            pauses++;
+                            currentParagraph.tokens.push({
+                                type: "pause",
+                                text: "[..]",
+                                start: lStart,
+                                end: lEnd,
+                                duration: Math.round(lDur * 100) / 100
+                            });
+                        }
+                    }
+                } else {
+                    var gap = Math.round((currWord.start - prevWord.end) * 1000) / 1000;
                     var prevEos = /[.!?]$/.test(prevWord.text);
 
-                    // Check for pause token
-                    if (gap >= this.minPauseLength) {
-                        pauses++;
-                        currentParagraph.tokens.push({
-                            type: "pause",
-                            text: "[..]",
-                            start: prevWord.end,
-                            end: currWord.start,
-                            duration: Math.round(gap * 100) / 100
-                        });
+                    // Find overlapping or bridging silence from ffmpeg silencedetect
+                    var matchedSilence = null;
+                    for (var si = 0; si < silences.length; si++) {
+                        var sil = silences[si];
+                        // Silence falls in transition between prevWord and currWord
+                        if (sil.start <= currWord.start + 0.08 && sil.end >= prevWord.end - 0.08 &&
+                            sil.end > prevWord.start + 0.02 && sil.start < currWord.end - 0.02) {
+                            if (!matchedSilence || sil.duration > matchedSilence.duration) {
+                                matchedSilence = sil;
+                            }
+                        }
                     }
 
-                    // Paragraph boundary check: gap > 1.2s or (eos and gap > 0.6s)
-                    if (gap > 1.2 || (prevEos && gap > 0.6)) {
+                    var isWordGapPause = (gap >= minPause);
+                    var isSilencePause = (matchedSilence && matchedSilence.duration >= minPause);
+
+                    if (isWordGapPause || isSilencePause) {
+                        var pStart = prevWord.end;
+                        var pEnd = currWord.start;
+
+                        if (isSilencePause && matchedSilence) {
+                            pStart = Math.min(pStart, matchedSilence.start);
+                            pEnd = Math.max(pEnd, matchedSilence.end);
+                        }
+
+                        // Safety clamp so pause range never consumes word speech cores
+                        pStart = Math.max(prevWord.start + 0.02, pStart);
+                        pEnd = Math.min(currWord.end - 0.02, pEnd);
+
+                        var pDur = Math.max(0.01, Math.round((pEnd - pStart) * 1000) / 1000);
+                        if (pDur >= minPause) {
+                            pauses++;
+                            currentParagraph.tokens.push({
+                                type: "pause",
+                                text: "[..]",
+                                start: Math.round(pStart * 1000) / 1000,
+                                end: Math.round(pEnd * 1000) / 1000,
+                                duration: Math.round(pDur * 100) / 100
+                            });
+                        }
+                    }
+
+                    // Paragraph boundary check: gap > 1.2s or (eos and gap > 0.6s) or long silence
+                    var isLongBreak = (gap > 1.2) || (prevEos && gap > 0.6) || (matchedSilence && matchedSilence.duration > 1.2);
+                    if (isLongBreak) {
                         if (currentParagraph.tokens.length > 0) {
                             this.paragraphs.push(currentParagraph);
                             currentParagraph = { tokens: [] };
@@ -597,7 +659,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         setMinPauseLength: function(val) {
             var num = parseFloat(val);
-            if (isNaN(num) || num < 0.10) num = 0.10;
+            if (isNaN(num) || num < 0.05) num = 0.05;
             if (num > 2.00) num = 2.00;
             this.minPauseLength = Math.round(num * 100) / 100;
 
@@ -881,18 +943,21 @@ document.addEventListener("DOMContentLoaded", function () {
         // Action 2: Delete All Pauses
         promptDeleteAllPauses: function() {
             var self = this;
-            if (!this.words || this.words.length < 2) {
-                showAlertModal("Notice", "No pauses detected in transcript.");
+            if (!this.words || this.words.length === 0) {
+                showAlertModal("Notice", "No transcript words available.");
                 return;
             }
 
             var pauseRanges = [];
-            for (var i = 1; i < this.words.length; i++) {
-                var prev = this.words[i - 1];
-                var curr = this.words[i];
-                var gap = curr.start - prev.end;
-                if (gap >= this.minPauseLength) {
-                    pauseRanges.push({ start: prev.end, end: curr.start });
+            for (var p = 0; p < this.paragraphs.length; p++) {
+                var tokens = this.paragraphs[p].tokens || [];
+                for (var t = 0; t < tokens.length; t++) {
+                    if (tokens[t].type === "pause") {
+                        pauseRanges.push({
+                            start: tokens[t].start,
+                            end: tokens[t].end
+                        });
+                    }
                 }
             }
 
@@ -1004,12 +1069,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
             // Preserve full transcript snapshot
             var snapshot = JSON.parse(JSON.stringify(this.words));
+            var silSnapshot = JSON.parse(JSON.stringify(this.rawSilences || []));
 
             // Call ExtendScript Host Bridge
             ExtendScriptBridge.rippleDeleteRanges(ranges, function(res) {
                 if (!res || !res.success) {
                     // On failure: never wipe transcript, restore snapshot, show exact error
                     self.words = snapshot;
+                    self.rawSilences = silSnapshot;
                     self.rebuildParagraphs();
                     self.render();
 
@@ -1074,6 +1141,43 @@ document.addEventListener("DOMContentLoaded", function () {
                     end: newEnd,
                     speaker: w.speaker
                 });
+            }
+
+            // Shift cached silence intervals
+            if (this.rawSilences && this.rawSilences.length > 0) {
+                var updatedSilences = [];
+                for (var s = 0; s < this.rawSilences.length; s++) {
+                    var sil = this.rawSilences[s];
+                    var isSilCut = false;
+                    for (var sk = 0; sk < sortedRanges.length; sk++) {
+                        var srng = sortedRanges[sk];
+                        if (sil.start >= srng.start - 0.04 && sil.end <= srng.end + 0.04) {
+                            isSilCut = true;
+                            break;
+                        }
+                    }
+                    if (isSilCut) continue;
+
+                    var shiftS = 0;
+                    for (var sj = 0; sj < sortedRanges.length; sj++) {
+                        var sr = sortedRanges[sj];
+                        var sdur = sr.end - sr.start;
+                        if (sil.start >= sr.end) {
+                            shiftS += sdur;
+                        } else if (sil.start > sr.start && sil.start < sr.end) {
+                            shiftS += (sil.start - sr.start);
+                        }
+                    }
+
+                    var newSStart = Math.max(0, Math.round((sil.start - shiftS) * 1000) / 1000);
+                    var newSEnd = Math.max(newSStart + 0.05, Math.round((sil.end - shiftS) * 1000) / 1000);
+                    updatedSilences.push({
+                        start: newSStart,
+                        end: newSEnd,
+                        duration: Math.round((newSEnd - newSStart) * 1000) / 1000
+                    });
+                }
+                this.rawSilences = updatedSilences;
             }
 
             this.words = remainingWords;
@@ -1504,6 +1608,18 @@ document.addEventListener("DOMContentLoaded", function () {
                 mViewOptions.addEventListener("click", function() {
                     if (menuDropdown) menuDropdown.classList.remove("show");
                     var modal = document.getElementById("modalViewOptions");
+                    var range = document.getElementById("rangeMinPauseLength");
+                    var lbl = document.getElementById("lblMinPauseVal");
+                    if (range) range.value = self.minPauseLength;
+                    if (lbl) lbl.innerText = self.minPauseLength.toFixed(2) + "s";
+                    var chkF = document.getElementById("chkShowFillers");
+                    if (chkF) chkF.checked = self.showFillers;
+                    var chkP = document.getElementById("chkShowPauses");
+                    if (chkP) chkP.checked = self.showPauses;
+                    var chkC = document.getElementById("chkShowCensored");
+                    if (chkC) chkC.checked = self.showCensored;
+                    var chkA = document.getElementById("chkAutoScrollToggle");
+                    if (chkA) chkA.checked = self.autoScrollEnabled;
                     if (modal) modal.style.display = "flex";
                 });
             }
@@ -2384,26 +2500,29 @@ function runTranscribeWorkflow() {
                         });
                     }
 
-                    // Build interactive transcript model & render on Transcript tab
-                    if (window.UltraTranscript) {
-                        window.UltraTranscript.buildModel(finalWords);
-                        window.UltraTranscript.render();
-                    }
+                    // Run ffmpeg silencedetect pass on sequence audio to augment pause recognition
+                    runSilenceDetection(audioPath, offset, function (silences) {
+                        // Build interactive transcript model & render on Transcript tab
+                        if (window.UltraTranscript) {
+                            window.UltraTranscript.buildModel(finalWords, silences);
+                            window.UltraTranscript.render();
+                        }
 
-                    // Keep captions data available for Captions tab from same result
-                    if (typeof SubtitleEditor !== "undefined" && SubtitleEditor.loadCaptions) {
-                        SubtitleEditor.loadCaptions(finalCaptions, finalWords);
-                    }
+                        // Keep captions data available for Captions tab from same result
+                        if (typeof SubtitleEditor !== "undefined" && SubtitleEditor.loadCaptions) {
+                            SubtitleEditor.loadCaptions(finalCaptions, finalWords);
+                        }
 
-                    if (window.SequenceStateManager) {
-                        window.SequenceStateManager.isTranscribing = false;
-                        window.SequenceStateManager.transcribedSequenceKey = window.SequenceStateManager.currentKey;
-                        window.SequenceStateManager.updateUI(window.SequenceStateManager.lastResult);
-                    }
+                        if (window.SequenceStateManager) {
+                            window.SequenceStateManager.isTranscribing = false;
+                            window.SequenceStateManager.transcribedSequenceKey = window.SequenceStateManager.currentKey;
+                            window.SequenceStateManager.updateUI(window.SequenceStateManager.lastResult);
+                        }
 
-                    if (backendRes.warning) {
-                        showAlertModal("Translation Warning", backendRes.warning);
-                    }
+                        if (backendRes.warning) {
+                            showAlertModal("Translation Warning", backendRes.warning);
+                        }
+                    });
                 });
             };
 
@@ -2433,6 +2552,85 @@ function runTranscribeWorkflow() {
             });
         });
     });
+}
+
+function runSilenceDetection(audioPath, offset, callback) {
+    if (typeof require === "undefined" || !audioPath) {
+        if (callback) callback([]);
+        return;
+    }
+
+    var fs = require("fs");
+    if (!fs.existsSync(audioPath)) {
+        if (callback) callback([]);
+        return;
+    }
+
+    var cp = require("child_process");
+    var ffmpegExe = (typeof DependencyInstaller !== "undefined" && DependencyInstaller.getFfmpegExecutable) ? DependencyInstaller.getFfmpegExecutable() : "ffmpeg";
+
+    var args = [
+        "-nostats",
+        "-i", audioPath,
+        "-af", "silencedetect=noise=-30dB:d=0.05",
+        "-f", "null",
+        "-"
+    ];
+
+    try {
+        var proc = cp.spawn(ffmpegExe, args, {
+            windowsHide: true
+        });
+        var stderrData = "";
+
+        proc.stderr.on("data", function(data) {
+            stderrData += data.toString();
+        });
+
+        proc.on("error", function(err) {
+            console.warn("[CaptionGeneratorUltra] Silence detection spawn error:", err);
+            if (callback) callback([]);
+        });
+
+        proc.on("close", function(code) {
+            var silences = [];
+            var lines = stderrData.split(/\r?\n/);
+            var currentSilenceStart = null;
+
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                var startMatch = line.match(/silence_start:\s*([0-9.]+)/);
+                if (startMatch) {
+                    currentSilenceStart = parseFloat(startMatch[1]);
+                }
+
+                var endMatch = line.match(/silence_end:\s*([0-9.]+)\s*\|\s*silence_duration:\s*([0-9.]+)/);
+                if (endMatch) {
+                    var sEnd = parseFloat(endMatch[1]);
+                    var sDur = parseFloat(endMatch[2]);
+                    var sStart = (currentSilenceStart !== null) ? currentSilenceStart : Math.max(0, sEnd - sDur);
+
+                    var finalStart = Math.round((sStart + offset) * 1000) / 1000;
+                    var finalEnd = Math.round((sEnd + offset) * 1000) / 1000;
+                    var finalDur = Math.round((finalEnd - finalStart) * 1000) / 1000;
+
+                    if (finalDur >= 0.05) {
+                        silences.push({
+                            start: finalStart,
+                            end: finalEnd,
+                            duration: finalDur
+                        });
+                    }
+                    currentSilenceStart = null;
+                }
+            }
+            console.log("[CaptionGeneratorUltra] Silence detection found " + silences.length + " silence intervals.");
+            if (callback) callback(silences);
+        });
+    } catch(e) {
+        console.warn("[CaptionGeneratorUltra] Silence detection failed:", e);
+        if (callback) callback([]);
+    }
 }
 
 function runPythonBackend(audioPath, projectDetails, callback) {
