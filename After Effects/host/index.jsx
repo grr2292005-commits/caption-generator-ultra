@@ -84,11 +84,13 @@ $._PPP_.getProjectDetails = function() {
 function resolveFilePath(f) {
     if (!f) return "";
     try {
+        if (typeof f === "string") return f.replace(/\\/g, "/");
         if (f.fsName && f.fsName.length > 0) return f.fsName.replace(/\\/g, "/");
         if (f.fullName && f.fullName.length > 0) return f.fullName.replace(/\\/g, "/");
         if (f.absoluteURI && f.absoluteURI.length > 0) {
             return decodeURIComponent(f.absoluteURI).replace(/^file:\/\/\//i, "").replace(/^file:\/\//i, "").replace(/\\/g, "/");
         }
+        if (f.path && f.name) return (f.path + "/" + f.name).replace(/\\/g, "/");
     } catch(e) {}
     return "";
 }
@@ -96,6 +98,10 @@ function resolveFilePath(f) {
 function getLayerSourceFile(layer) {
     if (!layer) return null;
     try {
+        // 1. Direct file property on layer
+        if (layer.file) return layer.file;
+
+        // 2. Direct layer source
         if (layer.source) {
             var src = layer.source;
             if (src.mainSource && src.mainSource.file) {
@@ -107,9 +113,24 @@ function getLayerSourceFile(layer) {
             if (src.typeName === "Composition" || (typeof CompItem !== "undefined" && src instanceof CompItem)) {
                 for (var p = 1; p <= src.numLayers; p++) {
                     var pl = src.layer(p);
-                    if (pl && pl.enabled && pl.source) {
-                        if (pl.source.mainSource && pl.source.mainSource.file) return pl.source.mainSource.file;
-                        if (pl.source.file) return pl.source.file;
+                    if (pl && pl.enabled) {
+                        var plFile = getLayerSourceFile(pl);
+                        if (plFile) return plFile;
+                    }
+                }
+            }
+        }
+
+        // 3. Search project items by name matching layer or layer source
+        if (app && app.project) {
+            var searchName = layer.name || "";
+            var srcName = (layer.source && layer.source.name) ? layer.source.name : "";
+            for (var i = 1; i <= app.project.numItems; i++) {
+                var pItem = app.project.item(i);
+                if (pItem) {
+                    if ((searchName && pItem.name === searchName) || (srcName && pItem.name === srcName)) {
+                        if (pItem.mainSource && pItem.mainSource.file) return pItem.mainSource.file;
+                        if (pItem.file) return pItem.file;
                     }
                 }
             }
@@ -141,6 +162,8 @@ function checkLayerHasAudio(layer) {
 function getCompSelectedLayers(comp) {
     var list = [];
     if (!comp) return list;
+
+    // Method 1: comp.selectedLayers
     try {
         if (comp.selectedLayers && comp.selectedLayers.length > 0) {
             for (var s = 0; s < comp.selectedLayers.length; s++) {
@@ -148,28 +171,44 @@ function getCompSelectedLayers(comp) {
             }
         }
     } catch(e1) {}
-    if (list.length === 0 && comp.numLayers > 0) {
-        try {
+
+    // Method 2: iterate all comp layers and test layer.selected
+    try {
+        if (comp.numLayers > 0) {
             for (var i = 1; i <= comp.numLayers; i++) {
                 var lyr = comp.layer(i);
-                if (lyr && lyr.selected) {
+                if (lyr && lyr.selected === true) {
                     list.push(lyr);
                 }
             }
-        } catch(e2) {}
+        }
+    } catch(e2) {}
+
+    // Deduplicate by layer index
+    var unique = [];
+    var seen = {};
+    for (var u = 0; u < list.length; u++) {
+        var l = list[u];
+        var idx = l.index || (u + 1);
+        if (!seen[idx]) {
+            seen[idx] = true;
+            unique.push(l);
+        }
     }
-    return list;
+    return unique;
 }
 
 function getActiveComp() {
     if (!app || !app.project) return null;
 
+    // 1. Check app.project.activeItem
     try {
         if (app.project.activeItem && isCompItem(app.project.activeItem)) {
             return app.project.activeItem;
         }
     } catch(e1) {}
 
+    // 2. Check activeViewer if it's a composition viewer
     try {
         if (app.activeViewer && app.activeViewer.type === ViewerType.VIEWER_COMPOSITION) {
             if (app.project.activeItem && isCompItem(app.project.activeItem)) {
@@ -178,6 +217,20 @@ function getActiveComp() {
         }
     } catch(e2) {}
 
+    // 3. Search all comps to find one that currently has selected layers
+    try {
+        for (var c = 1; c <= app.project.numItems; c++) {
+            var cItem = app.project.item(c);
+            if (isCompItem(cItem)) {
+                var selLayers = getCompSelectedLayers(cItem);
+                if (selLayers && selLayers.length > 0) {
+                    return cItem;
+                }
+            }
+        }
+    } catch(e3) {}
+
+    // 4. Check selected comp in project panel
     try {
         for (var i = 1; i <= app.project.numItems; i++) {
             var item = app.project.item(i);
@@ -185,8 +238,9 @@ function getActiveComp() {
                 return item;
             }
         }
-    } catch(e3) {}
+    } catch(e4) {}
 
+    // 5. Fallback to first comp in project
     try {
         for (var j = 1; j <= app.project.numItems; j++) {
             var item2 = app.project.item(j);
@@ -194,7 +248,7 @@ function getActiveComp() {
                 return item2;
             }
         }
-    } catch(e4) {}
+    } catch(e5) {}
 
     return null;
 }
@@ -235,7 +289,6 @@ $._PPP_.getSelectedLayersInfo = function() {
 
             var f = getLayerSourceFile(layer);
             var filePath = resolveFilePath(f);
-            if (!filePath) continue;
 
             var lIn = parseFloat(layer.inPoint) || 0;
             var lOut = parseFloat(layer.outPoint) || (parseFloat(layer.inPoint) + 0.1);
@@ -250,12 +303,12 @@ $._PPP_.getSelectedLayersInfo = function() {
                 seenIndices[idx] = true;
                 selectedLayers.push({
                     index: idx,
-                    name: layer.name || ("Layer_" + idx),
+                    name: layer.name || ("Layer " + idx),
                     start: Math.round(lIn * 1000) / 1000,
                     end: Math.round(lOut * 1000) / 1000,
                     duration: Math.round(dur * 1000) / 1000,
                     hasAudio: checkLayerHasAudio(layer),
-                    mediaPath: filePath
+                    mediaPath: filePath || ""
                 });
             }
         }
@@ -270,7 +323,7 @@ $._PPP_.getSelectedLayersInfo = function() {
         }
 
         var resObj = {
-            totalSelectedLayers: rawSelected.length,
+            totalSelectedLayers: selectedLayers.length,
             selectedCount: selectedLayers.length,
             totalDuration: Math.round(totalDur * 1000) / 1000,
             layers: selectedLayers

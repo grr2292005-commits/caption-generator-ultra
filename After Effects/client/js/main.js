@@ -485,7 +485,7 @@ function updateScopeUI() {
             ActiveCompState.selectedLayersNames = names;
 
             if (count === 0) {
-                if (statusText) statusText.innerText = "No audio/video layers selected in timeline.";
+                if (statusText) statusText.innerText = "No layers selected in timeline.";
                 if (notice) notice.style.display = "block";
                 if (btn) {
                     btn.disabled = true;
@@ -530,13 +530,12 @@ var TranscriptViewer = {
                 successContainer.style.setProperty("opacity", "1", "important");
             }
 
-            if (debugBanner) {
-                debugBanner.style.display = "block";
-                debugBanner.innerText = `[Transcript Loaded] Words: ${this.words.length} | Captions: ${SubtitleEditor.captions.length} | Status: Visible`;
-            }
-
             if (!container) {
                 console.error("Transcript container #transcriptBody not found in DOM");
+                if (debugBanner) {
+                    debugBanner.style.display = "block";
+                    debugBanner.innerText = `[Error] #transcriptBody element missing in DOM!`;
+                }
                 return;
             }
 
@@ -547,6 +546,11 @@ var TranscriptViewer = {
             if (totalWords === 0) {
                 container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 11px;">Transcription finished but no words were parsed.</div>';
                 if (statsEl) statsEl.innerText = "0 words • 0 pauses • 0 paragraphs";
+                if (debugBanner) {
+                    debugBanner.style.display = "block";
+                    debugBanner.innerHTML = `<div style="margin-bottom: 2px;">[Transcript Loaded] Words: 0 | Captions: ${SubtitleEditor.captions.length} | Status: Empty</div>` +
+                        `<div>[DOM Diagnostic] transcriptBody childCount: ${container.children.length} | textLength: ${(container.innerText || "").length}</div>`;
+                }
                 return;
             }
 
@@ -631,6 +635,14 @@ var TranscriptViewer = {
 
             if (statsEl) {
                 statsEl.innerText = `${totalWords} words • ${pauseCount} pauses • ${paragraphCount} paragraphs`;
+            }
+
+            if (debugBanner) {
+                var childCount = container ? container.children.length : 0;
+                var textLen = container ? (container.innerText || "").length : 0;
+                debugBanner.style.display = "block";
+                debugBanner.innerHTML = `<div style="margin-bottom: 2px;">[Transcript Loaded] Words: ${this.words.length} | Captions: ${SubtitleEditor.captions.length} | Status: Visible</div>` +
+                    `<div>[DOM Diagnostic] transcriptBody childCount: ${childCount} | textLength: ${textLen}</div>`;
             }
 
             this.updateSearchMatches();
@@ -921,6 +933,9 @@ document.addEventListener("DOMContentLoaded", function() {
     var btnCancelTranscribe = document.getElementById("btnCancelTranscribe");
     var btnApplyEdits = document.getElementById("btnApplyEdits");
     var btnExportSRT = document.getElementById("btnExportSRT");
+    var btnTranscriptCreateLayers = document.getElementById("btnTranscriptCreateLayers");
+    var btnExportTranscriptTXT = document.getElementById("btnExportTranscriptTXT");
+    var btnExportTranscriptJSON = document.getElementById("btnExportTranscriptJSON");
 
     if (btnTranscribe) {
         btnTranscribe.addEventListener("click", function() {
@@ -937,6 +952,24 @@ document.addEventListener("DOMContentLoaded", function() {
     if (btnApplyEdits) {
         btnApplyEdits.addEventListener("click", function() {
             importSubtitlesToSequence();
+        });
+    }
+
+    if (btnTranscriptCreateLayers) {
+        btnTranscriptCreateLayers.addEventListener("click", function() {
+            importSubtitlesToSequence();
+        });
+    }
+
+    if (btnExportTranscriptTXT) {
+        btnExportTranscriptTXT.addEventListener("click", function() {
+            exportTranscriptTXT();
+        });
+    }
+
+    if (btnExportTranscriptJSON) {
+        btnExportTranscriptJSON.addEventListener("click", function() {
+            exportTranscriptJSON();
         });
     }
 
@@ -977,7 +1010,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // 10. Active Composition Polling Loop
     pollActiveCompInfo();
-    setInterval(pollActiveCompInfo, 2500);
+    setInterval(pollActiveCompInfo, 2000);
 });
 
 var ALL_MODELS_ORDER = [
@@ -1137,7 +1170,7 @@ function runTranscribeWorkflow() {
         var scopeMode = selScope ? selScope.value : "full";
 
         if (scopeMode === "selected" && ActiveCompState.selectedLayersCount === 0) {
-            showAlertModal("No Layers Selected", "Please select one or more audio/video layers in the After Effects timeline before transcribing.");
+            showAlertModal("No Layers Selected", "Please select one or more layers in the After Effects timeline before transcribing.");
             return;
         }
 
@@ -1439,6 +1472,7 @@ function runPythonBackend(audioPath, projectDetails, callback) {
 function importSubtitlesToSequence() {
     ensureLicensedAction("import", function() {
         var btn = document.getElementById("btnApplyEdits");
+        var btnTrans = document.getElementById("btnTranscriptCreateLayers");
         var originalText = "Create Text Layers in Comp";
 
         var captions = SubtitleEditor.captions;
@@ -1448,9 +1482,14 @@ function importSubtitlesToSequence() {
             return;
         }
 
-        if (!btn || btn.disabled) return;
-        btn.disabled = true;
-        btn.innerText = "Creating Text Layers...";
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = "Creating Text Layers...";
+        }
+        if (btnTrans) {
+            btnTrans.disabled = true;
+            btnTrans.innerText = "Creating...";
+        }
 
         var methodSelect = document.getElementById("selectImportMethod");
         var importMethod = methodSelect ? methodSelect.value : "direct";
@@ -1482,8 +1521,14 @@ function importSubtitlesToSequence() {
             fs.writeFileSync(jsonPath, JSON.stringify(payload, null, 4), "utf-8");
 
             ExtendScriptBridge.importStyledSubtitles(jsonPath, importMethod, replaceExisting, function(res) {
-                btn.disabled = false;
-                btn.innerText = originalText;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                }
+                if (btnTrans) {
+                    btnTrans.disabled = false;
+                    btnTrans.innerText = "Create Text Layers in Comp";
+                }
                 if (!res || !res.success) {
                     var rawErr = (res && res.error) ? res.error : "Unknown error";
                     showAlertModal("Subtitle Error", "Could not create text layers: " + rawErr);
@@ -1492,9 +1537,78 @@ function importSubtitlesToSequence() {
                 }
             });
         } else {
-            btn.disabled = false;
-            btn.innerText = originalText;
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+            if (btnTrans) {
+                btnTrans.disabled = false;
+                btnTrans.innerText = "Create Text Layers in Comp";
+            }
             showAlertModal("Preview Mode", "Created " + captions.length + " text layers in active comp (Browser Preview Mode).");
+        }
+    });
+}
+
+function exportTranscriptTXT() {
+    ensureLicensedAction("export", function() {
+        if (!TranscriptViewer.words || TranscriptViewer.words.length === 0) {
+            showAlertModal("No Transcript", "No transcript words available to export.");
+            return;
+        }
+
+        var fullText = TranscriptViewer.words.map(function(w) {
+            return (w.word !== undefined ? w.word : (w.text || "")).trim();
+        }).join(" ");
+
+        if (typeof require !== "undefined") {
+            var fs = require("fs");
+            var path = require("path");
+            var os = require("os");
+            var desktopPath = path.join(os.homedir(), "Desktop", "transcript.txt");
+
+            try {
+                fs.writeFileSync(desktopPath, fullText, "utf-8");
+                showAlertModal("Transcript Exported", "Plain text transcript exported to your Desktop:\n" + desktopPath.replace(/\\/g, "/"));
+            } catch(e) {
+                var tempPath = path.join(getTempFolder(), "transcript.txt");
+                fs.writeFileSync(tempPath, fullText, "utf-8");
+                showAlertModal("Transcript Exported", "Plain text transcript exported to:\n" + tempPath.replace(/\\/g, "/"));
+            }
+        } else {
+            showAlertModal("Transcript Exported", "Plain text transcript exported (Browser Preview Mode).");
+        }
+    });
+}
+
+function exportTranscriptJSON() {
+    ensureLicensedAction("export", function() {
+        if (!TranscriptViewer.words || TranscriptViewer.words.length === 0) {
+            showAlertModal("No Transcript", "No transcript words available to export.");
+            return;
+        }
+
+        var jsonPayload = {
+            captions: SubtitleEditor.captions || [],
+            words: TranscriptViewer.words || []
+        };
+
+        if (typeof require !== "undefined") {
+            var fs = require("fs");
+            var path = require("path");
+            var os = require("os");
+            var desktopPath = path.join(os.homedir(), "Desktop", "transcript.json");
+
+            try {
+                fs.writeFileSync(desktopPath, JSON.stringify(jsonPayload, null, 4), "utf-8");
+                showAlertModal("JSON Exported", "Transcript JSON exported to your Desktop:\n" + desktopPath.replace(/\\/g, "/"));
+            } catch(e) {
+                var tempPath = path.join(getTempFolder(), "transcript.json");
+                fs.writeFileSync(tempPath, JSON.stringify(jsonPayload, null, 4), "utf-8");
+                showAlertModal("JSON Exported", "Transcript JSON exported to:\n" + tempPath.replace(/\\/g, "/"));
+            }
+        } else {
+            showAlertModal("JSON Exported", "Transcript JSON exported (Browser Preview Mode).");
         }
     });
 }
@@ -1550,7 +1664,7 @@ function showAlertModal(title, message) {
     var html = "";
     lines.forEach(function(line) {
         var trimmed = line.trim();
-        if (trimmed.indexOf("/") !== -1 || trimmed.indexOf("\\") !== -1 || trimmed.indexOf(".srt") !== -1) {
+        if (trimmed.indexOf("/") !== -1 || trimmed.indexOf("\\") !== -1 || trimmed.indexOf(".srt") !== -1 || trimmed.indexOf(".txt") !== -1 || trimmed.indexOf(".json") !== -1) {
             html += `<div style="background-color: var(--surface-elevated); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; font-family: monospace; font-size: 10px; color: var(--accent); margin-top: 4px; word-break: break-all; user-select: all;">${line.replace(/\\/g, "/")}</div>`;
         } else if (trimmed.length > 0) {
             html += `<div style="margin-bottom: 4px; font-size: 11px;">${line}</div>`;
