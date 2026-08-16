@@ -3,25 +3,27 @@
 ## Overview
 Caption Generator ULTRA is the local AI transcription, text-based editing, and captioning suite for Adobe Premiere Pro and Adobe After Effects.
 
-## Core Features
+---
+
+## Core Capabilities by Host
 
 ### Premiere Pro (ULTRA)
-- **Local Whisper AI Transcription**: Embedded offline Whisper models (Tiny, Base, Small, Medium, Large-v3) with word-level timestamps.
-- **Flexible Scope Control**: Transcribe the full active sequence ("All Clips") or only the clips currently selected in the timeline ("Selected Clips").
-- **Text-Based Video Editing**: Ripple cut pauses, filler words, and highlighted word selections directly on the active Premiere sequence timeline.
-- **Interactive Transcript Tools**: Real-time pause threshold slider, word search and replace, custom censorship, and click-to-playhead navigation.
-- **Adobe Premiere Native Transcript Export**: Generates official static transcript format (`.json`) for review and playhead navigation in Premiere Pro's Text panel.
-- **Captions & SRT Export**: In-panel subtitle editor with line metrics (CPL/CPS) and direct `.srt` file export.
+- **Local Whisper Transcription**: Embedded offline Whisper models (Tiny, Base, Small, Medium, Large-v3) with word-level timestamps.
+- **Scope Options**: Transcribe the full active sequence ("All Clips") or selected timeline clip(s) ("Selected Clips").
+- **Interactive Transcript & Ripple Editing**: Interactive word chips, silence pause removal (`[..]`), filler word removal, highlighted text selection ripple cuts, and playhead sync.
+- **Captions & SRT Export**: Full in-panel subtitle cue editor with CPL/CPS metrics and standard `.srt` export.
+- **Static JSON Export**: Exports static transcript `.json` formatted for Premiere Pro's Text panel for review and navigation only (does not support Premiere native text-based ripple cuts).
 
 ### After Effects (ULTRA)
-- **Local Whisper AI Transcription**: Embedded offline Whisper speech recognition for active compositions.
-- **Composition Scope Control**: Transcribe Full Composition, Work Area, or Selected Layers (with selection caching and single-media fallback).
-- **Captions Review & Text Layers**: In-panel cue review, typography customization (font size, color, stroke, alignment, position), and one-click creation of native text layers in your active comp.
-- **SRT Export**: Export subtitle cues directly to standard `.srt` format.
+- **Local Whisper Transcription**: Embedded offline Whisper speech recognition for active compositions.
+- **Scope Options**: Full Composition, Work Area, or Selected Layers (with focus snapshot caching and single-media fallback).
+- **Captions & Timed Text Layers**: In-panel cue editor to review/edit subtitles, format typography (font size, color, stroke, alignment, position), and create basic timed text layers directly in your active comp.
+- **SRT Export**: Export subtitle cues directly to `.srt` format.
+- *Note:* Does not include text animation presets (pop, scale, bounce, karaoke).
 
 ---
 
-## Applications & Side-by-Side Installation
+## Installation Paths
 
 ### 1. Adobe Premiere Pro Extension
 - **Source Directory**: `Premiere Pro/`
