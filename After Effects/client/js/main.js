@@ -392,6 +392,7 @@ var isTranscribing = false;
 // Active Comp & Scope Manager
 var ActiveCompState = {
     compName: "No Active Comp",
+    compId: 0,
     duration: 0,
     layerCount: 0,
     workStart: 0,
@@ -399,7 +400,12 @@ var ActiveCompState = {
     hasComp: false,
     selectedLayersCount: 0,
     selectedLayersDuration: 0,
-    selectedLayersNames: ""
+    selectedLayersNames: "",
+    selectedLayersIndices: [],
+    // Last-valid Selection Snapshot Cache (prevents clearing when clicking into CEP)
+    cachedSelectedLayers: null,
+    // Sole Media Layer Fallback
+    fallbackSoleLayer: null
 };
 
 function pollActiveCompInfo() {
@@ -414,6 +420,13 @@ function pollActiveCompInfo() {
         var badge = document.getElementById("lblCompStatusBadge");
 
         if (res && res.success) {
+            // Check if composition changed
+            if (res.compId && ActiveCompState.compId && res.compId !== ActiveCompState.compId) {
+                ActiveCompState.cachedSelectedLayers = null;
+                ActiveCompState.fallbackSoleLayer = null;
+            }
+            if (res.compId) ActiveCompState.compId = res.compId;
+
             ActiveCompState.hasComp = true;
             ActiveCompState.compName = res.compName;
             ActiveCompState.duration = res.duration;
@@ -431,6 +444,8 @@ function pollActiveCompInfo() {
             }
         } else {
             ActiveCompState.hasComp = false;
+            ActiveCompState.cachedSelectedLayers = null;
+            ActiveCompState.fallbackSoleLayer = null;
             if (lblName) lblName.innerText = "No Composition Open";
             if (lblDur) lblDur.innerText = "--:--";
             if (lblLayers) lblLayers.innerText = "Open a comp in After Effects";
@@ -481,27 +496,83 @@ function updateScopeUI() {
         ExtendScriptBridge.getSelectedLayersInfo(function(selRes) {
             if (isTranscribing) return;
 
-            var count = (selRes && selRes.selectedCount) ? selRes.selectedCount : 0;
-            var dur = (selRes && selRes.totalDuration) ? selRes.totalDuration : 0;
-            var names = (selRes && selRes.layers) ? selRes.layers.map(function(l) { return l.name; }).join(", ") : "";
+            if (selRes && selRes.success) {
+                // If composition changed, reset cache
+                if (selRes.compId && ActiveCompState.compId && selRes.compId !== ActiveCompState.compId) {
+                    ActiveCompState.cachedSelectedLayers = null;
+                    ActiveCompState.fallbackSoleLayer = null;
+                }
+                if (selRes.compId) ActiveCompState.compId = selRes.compId;
 
-            ActiveCompState.selectedLayersCount = count;
-            ActiveCompState.selectedLayersDuration = dur;
-            ActiveCompState.selectedLayersNames = names;
+                var liveCount = selRes.selectedCount || 0;
+                var liveLayers = selRes.layers || [];
 
-            if (count === 0) {
+                if (liveCount > 0) {
+                    // Update cache with fresh timeline selection
+                    ActiveCompState.cachedSelectedLayers = {
+                        count: liveCount,
+                        layers: liveLayers,
+                        names: liveLayers.map(function(l) { return l.name; }).join(", "),
+                        duration: selRes.totalDuration || 0,
+                        indices: liveLayers.map(function(l) { return l.index; }),
+                        compId: selRes.compId
+                    };
+                }
+
+                // Check sole media layer
+                if (selRes.hasSoleMediaLayer && selRes.soleMediaLayer) {
+                    ActiveCompState.fallbackSoleLayer = selRes.soleMediaLayer;
+                } else {
+                    ActiveCompState.fallbackSoleLayer = null;
+                }
+
+                if (ActiveCompState.cachedSelectedLayers && ActiveCompState.cachedSelectedLayers.count > 0) {
+                    var cache = ActiveCompState.cachedSelectedLayers;
+                    ActiveCompState.selectedLayersCount = cache.count;
+                    ActiveCompState.selectedLayersDuration = cache.duration;
+                    ActiveCompState.selectedLayersNames = cache.names;
+                    ActiveCompState.selectedLayersIndices = cache.indices;
+
+                    var isLive = (liveCount > 0);
+                    var cachedTag = isLive ? "" : " (cached from timeline)";
+                    if (statusText) statusText.innerText = "Selected: " + cache.names + cachedTag + " (" + cache.duration.toFixed(1) + "s total)";
+                    if (notice) notice.style.display = "none";
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerText = "Transcribe Selected Layer" + (cache.count > 1 ? "s (" + cache.count + ")" : "");
+                    }
+                } else if (ActiveCompState.fallbackSoleLayer) {
+                    var sole = ActiveCompState.fallbackSoleLayer;
+                    ActiveCompState.selectedLayersCount = 1;
+                    ActiveCompState.selectedLayersDuration = sole.duration || 0;
+                    ActiveCompState.selectedLayersNames = sole.name || "Media Layer";
+                    ActiveCompState.selectedLayersIndices = [sole.index];
+
+                    if (statusText) statusText.innerText = "Using only media layer in comp: " + (sole.name || "Layer") + " (" + (sole.duration || 0).toFixed(1) + "s)";
+                    if (notice) notice.style.display = "none";
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerText = "Transcribe Media Layer (" + (sole.name || "Layer") + ")";
+                    }
+                } else {
+                    ActiveCompState.selectedLayersCount = 0;
+                    ActiveCompState.selectedLayersDuration = 0;
+                    ActiveCompState.selectedLayersNames = "";
+                    ActiveCompState.selectedLayersIndices = [];
+
+                    if (statusText) statusText.innerText = "Selected: 0 layers (Select in AE Timeline)";
+                    if (notice) notice.style.display = "block";
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.innerText = "Select Layer(s) in Timeline";
+                    }
+                }
+            } else {
                 if (statusText) statusText.innerText = "Selected: 0 layers (Select in AE Timeline)";
                 if (notice) notice.style.display = "block";
                 if (btn) {
                     btn.disabled = true;
                     btn.innerText = "Select Layer(s) in Timeline";
-                }
-            } else {
-                if (statusText) statusText.innerText = "Selected: " + names + " (" + dur.toFixed(1) + "s total)";
-                if (notice) notice.style.display = "none";
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerText = "Transcribe Selected Layer" + (count > 1 ? "s (" + count + ")" : "");
                 }
             }
         });
@@ -848,9 +919,18 @@ function runTranscribeWorkflow() {
         var selScope = document.getElementById("selectTranscribeScope");
         var scopeMode = selScope ? selScope.value : "full";
 
-        if (scopeMode === "selected" && ActiveCompState.selectedLayersCount === 0) {
-            showAlertModal("No Layers Selected", "Please select one or more layers in the After Effects timeline before transcribing.");
-            return;
+        var targetLayerIndices = [];
+        if (scopeMode === "selected") {
+            if (ActiveCompState.selectedLayersIndices && ActiveCompState.selectedLayersIndices.length > 0) {
+                targetLayerIndices = ActiveCompState.selectedLayersIndices;
+            } else if (ActiveCompState.fallbackSoleLayer) {
+                targetLayerIndices = [ActiveCompState.fallbackSoleLayer.index];
+            }
+
+            if (targetLayerIndices.length === 0 && ActiveCompState.selectedLayersCount === 0) {
+                showAlertModal("No Layers Selected", "Please select one or more layers in the After Effects timeline before transcribing.");
+                return;
+            }
         }
 
         if (successContainer) successContainer.style.display = "none";
@@ -929,7 +1009,7 @@ function runTranscribeWorkflow() {
                 if (isTranscriptionCancelled) return;
                 var tempAudioPath = getTempAudioPath();
 
-                ExtendScriptBridge.exportAudio(tempAudioPath, scopeMode, function(exportRes) {
+                ExtendScriptBridge.exportAudio(tempAudioPath, scopeMode, targetLayerIndices, function(exportRes) {
                     if (isTranscriptionCancelled) return;
 
                     if (!exportRes || !exportRes.success) {

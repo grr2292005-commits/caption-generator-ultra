@@ -352,20 +352,48 @@ $._PPP_.getSelectedLayersInfo = function() {
             totalDur += selectedLayers[k].duration;
         }
 
+        // Also scan all AV/media layers in the active comp for sole-media layer fallback
+        var allMediaLayers = [];
+        for (var m = 1; m <= comp.numLayers; m++) {
+            var mLayer = comp.layer(m);
+            if (!mLayer || !mLayer.enabled) continue;
+            var mFile = getLayerSourceFile(mLayer);
+            var mPath = resolveFilePath(mFile);
+            if (mPath || (mLayer.source && (mLayer.source.mainSource || mLayer.source.file))) {
+                var mIn = parseFloat(mLayer.inPoint) || 0;
+                var mOut = parseFloat(mLayer.outPoint) || (mIn + (parseFloat(comp.duration) || 1.0));
+                var mDur = Math.max(0.1, mOut - mIn);
+                allMediaLayers.push({
+                    index: mLayer.index || m,
+                    name: mLayer.name || ("Layer " + m),
+                    start: Math.round(mIn * 1000) / 1000,
+                    end: Math.round(mOut * 1000) / 1000,
+                    duration: Math.round(mDur * 1000) / 1000,
+                    hasAudio: checkLayerHasAudio(mLayer),
+                    mediaPath: mPath || ""
+                });
+            }
+        }
+
         var resObj = {
             totalSelectedLayers: selectedLayers.length,
             selectedCount: selectedLayers.length,
             totalDuration: Math.round(totalDur * 1000) / 1000,
-            layers: selectedLayers
+            layers: selectedLayers,
+            compId: comp.id || 0,
+            compName: comp.name || "Active Comp",
+            allMediaLayersCount: allMediaLayers.length,
+            hasSoleMediaLayer: (allMediaLayers.length === 1),
+            soleMediaLayer: (allMediaLayers.length === 1 ? allMediaLayers[0] : null)
         };
 
-        return "OK|" + stringifyJson(resObj);
+        return "OK|" + jsonStringify(resObj);
     } catch(e) {
         return "ERR|" + e.toString();
     }
 };
 
-$._PPP_.exportAudio = function(targetWavPath, scopeMode) {
+$._PPP_.exportAudio = function(targetWavPath, scopeMode, layerIndicesParam) {
     try {
         var comp = getActiveComp();
         if (!comp) {
@@ -391,7 +419,48 @@ $._PPP_.exportAudio = function(targetWavPath, scopeMode) {
 
         var layerList = [];
         if (isSelected) {
-            layerList = getCompSelectedLayers(comp);
+            // Check if specific layer indices were requested (from client-side cache)
+            var targetIndices = [];
+            if (layerIndicesParam && typeof layerIndicesParam === "string" && layerIndicesParam.length > 0) {
+                var cleanParam = layerIndicesParam.replace(/[\[\]\s]/g, "");
+                if (cleanParam.length > 0) {
+                    var parts = cleanParam.split(",");
+                    for (var p = 0; p < parts.length; p++) {
+                        var parsedIdx = parseInt(parts[p], 10);
+                        if (!isNaN(parsedIdx) && parsedIdx >= 1 && parsedIdx <= comp.numLayers) {
+                            targetIndices.push(parsedIdx);
+                        }
+                    }
+                }
+            }
+
+            if (targetIndices.length > 0) {
+                for (var t = 0; t < targetIndices.length; t++) {
+                    var tLayer = comp.layer(targetIndices[t]);
+                    if (tLayer) layerList.push(tLayer);
+                }
+            } else {
+                layerList = getCompSelectedLayers(comp);
+            }
+
+            // If still empty, check sole media layer fallback
+            if (layerList.length === 0) {
+                var soleCandidate = null;
+                var mediaCount = 0;
+                for (var s = 1; s <= comp.numLayers; s++) {
+                    var sLayer = comp.layer(s);
+                    if (sLayer && sLayer.enabled) {
+                        var sFile = getLayerSourceFile(sLayer);
+                        if (resolveFilePath(sFile) || (sLayer.source && sLayer.source.mainSource)) {
+                            mediaCount++;
+                            soleCandidate = sLayer;
+                        }
+                    }
+                }
+                if (mediaCount === 1 && soleCandidate) {
+                    layerList.push(soleCandidate);
+                }
+            }
         } else {
             for (var i = 1; i <= comp.numLayers; i++) {
                 layerList.push(comp.layer(i));

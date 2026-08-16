@@ -75,12 +75,21 @@ var ExtendScriptBridge = {
         });
     },
 
-    exportAudio: function(targetPath, scopeMode, callback) {
+    exportAudio: function(targetPath, scopeMode, layerIndices, callback) {
+        if (typeof layerIndices === "function") {
+            callback = layerIndices;
+            layerIndices = null;
+        }
         if (typeof scopeMode === "function") {
             callback = scopeMode;
             scopeMode = "full";
+            layerIndices = null;
         }
         scopeMode = scopeMode || "full";
+        var indicesStr = "";
+        if (layerIndices) {
+            indicesStr = Array.isArray(layerIndices) ? layerIndices.join(",") : String(layerIndices);
+        }
 
         this.loadHost(function(ok, err) {
             if (!ok) {
@@ -88,7 +97,7 @@ var ExtendScriptBridge = {
                 return;
             }
 
-            var cmd = '$._PPP_.exportAudio("", "' + scopeMode + '")';
+            var cmd = '$._PPP_.exportAudio("", "' + scopeMode + '", "' + indicesStr + '")';
             ExtendScriptBridge.csInterface.evalScript(cmd, function(result) {
                 if (!result || result === "EvalScript error.") {
                     if (callback) callback({ success: false, error: "ExtendScript evaluation failed. Result: " + result });
