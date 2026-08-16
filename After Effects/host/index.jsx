@@ -40,6 +40,36 @@ function parseJsonSafe(str) {
     return null;
 }
 
+function jsonStringify(obj) {
+    if (typeof JSON !== "undefined" && JSON && typeof JSON.stringify === "function") {
+        try {
+            return JSON.stringify(obj);
+        } catch(eJson) {}
+    }
+    if (obj === null || typeof obj === "undefined") return "null";
+    if (typeof obj === "number" || typeof obj === "boolean") return String(obj);
+    if (typeof obj === "string") {
+        return '"' + obj.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t") + '"';
+    }
+    if (obj instanceof Array) {
+        var arrStr = [];
+        for (var a = 0; a < obj.length; a++) {
+            arrStr.push(jsonStringify(obj[a]));
+        }
+        return "[" + arrStr.join(",") + "]";
+    }
+    if (typeof obj === "object") {
+        var objStr = [];
+        for (var key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                objStr.push('"' + key + '":' + jsonStringify(obj[key]));
+            }
+        }
+        return "{" + objStr.join(",") + "}";
+    }
+    return "null";
+}
+
 function isCompItem(item) {
     if (!item) return false;
     try {
@@ -472,29 +502,9 @@ $._PPP_.exportAudio = function(targetWavPath, scopeMode) {
             clips: activeManifestClips
         };
 
-        function stringifyJson(obj) {
-            if (typeof obj === "string") return '"' + obj.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r") + '"';
-            if (typeof obj === "number" || typeof obj === "boolean") return String(obj);
-            if (obj instanceof Array) {
-                var arrStr = [];
-                for (var a = 0; a < obj.length; a++) arrStr.push(stringifyJson(obj[a]));
-                return "[" + arrStr.join(",") + "]";
-            }
-            if (typeof obj === "object" && obj !== null) {
-                var objStr = [];
-                for (var key in obj) {
-                    if (obj.hasOwnProperty(key)) {
-                        objStr.push('"' + key + '":' + stringifyJson(obj[key]));
-                    }
-                }
-                return "{" + objStr.join(",") + "}";
-            }
-            return "null";
-        }
-
         manifestFile.encoding = "UTF-8";
         manifestFile.open("w");
-        var jsonText = stringifyJson(manifestData);
+        var jsonText = jsonStringify(manifestData);
         manifestFile.write(jsonText);
         manifestFile.close();
 

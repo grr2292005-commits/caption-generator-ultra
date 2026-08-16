@@ -386,6 +386,9 @@ function setupIconToggleGroups() {
     bindGroup("groupAlign", "selectAlign");
 }
 
+// Global Transcription State
+var isTranscribing = false;
+
 // Active Comp & Scope Manager
 var ActiveCompState = {
     compName: "No Active Comp",
@@ -400,7 +403,11 @@ var ActiveCompState = {
 };
 
 function pollActiveCompInfo() {
+    if (isTranscribing) return; // Never disturb active transcription running UI
+
     ExtendScriptBridge.getActiveCompInfo(function(res) {
+        if (isTranscribing) return;
+
         var lblName = document.getElementById("lblActiveCompName");
         var lblDur = document.getElementById("lblActiveCompDur");
         var lblLayers = document.getElementById("lblActiveCompLayers");
@@ -438,11 +445,17 @@ function pollActiveCompInfo() {
 }
 
 function updateScopeUI() {
+    if (isTranscribing) return; // Keep progress state untouched
+
     var selScope = document.getElementById("selectTranscribeScope");
     var badge = document.getElementById("lblScopeBadge");
     var statusText = document.getElementById("lblScopeStatus");
     var notice = document.getElementById("scopeSelectionNotice");
     var btn = document.getElementById("btnTranscribe");
+    var btnCancel = document.getElementById("btnCancelTranscribe");
+
+    if (btnCancel) btnCancel.style.display = "none";
+    if (btn) btn.style.display = "";
 
     if (!selScope) return;
     var scopeVal = selScope.value || "full";
@@ -466,6 +479,8 @@ function updateScopeUI() {
     } else if (scopeVal === "selected") {
         if (badge) badge.innerText = "Selected Layers";
         ExtendScriptBridge.getSelectedLayersInfo(function(selRes) {
+            if (isTranscribing) return;
+
             var count = (selRes && selRes.selectedCount) ? selRes.selectedCount : 0;
             var dur = (selRes && selRes.totalDuration) ? selRes.totalDuration : 0;
             var names = (selRes && selRes.layers) ? selRes.layers.map(function(l) { return l.name; }).join(", ") : "";
@@ -475,18 +490,18 @@ function updateScopeUI() {
             ActiveCompState.selectedLayersNames = names;
 
             if (count === 0) {
-                if (statusText) statusText.innerText = "No layers selected in timeline.";
+                if (statusText) statusText.innerText = "Selected: 0 layers (Select in AE Timeline)";
                 if (notice) notice.style.display = "block";
                 if (btn) {
                     btn.disabled = true;
                     btn.innerText = "Select Layer(s) in Timeline";
                 }
             } else {
-                if (statusText) statusText.innerText = "Scope: Selected Layers (" + count + " selected: " + names + " - " + dur.toFixed(1) + "s total)";
+                if (statusText) statusText.innerText = "Selected: " + names + " (" + dur.toFixed(1) + "s total)";
                 if (notice) notice.style.display = "none";
                 if (btn) {
                     btn.disabled = false;
-                    btn.innerText = "Transcribe Selected Layers (" + count + ")";
+                    btn.innerText = "Transcribe Selected Layer" + (count > 1 ? "s (" + count + ")" : "");
                 }
             }
         });
@@ -663,9 +678,13 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     });
 
-    // 9. Active Composition Polling Loop
+    // 9. Active Composition Polling Loop (every 800ms)
     pollActiveCompInfo();
-    setInterval(pollActiveCompInfo, 2000);
+    setInterval(function() {
+        if (!isTranscribing) {
+            pollActiveCompInfo();
+        }
+    }, 800);
 });
 
 var ALL_MODELS_ORDER = [
@@ -796,21 +815,25 @@ function cancelTranscribeWorkflow() {
         activePythonProcess = null;
     }
 
+    isTranscribing = false;
     var btn = document.getElementById("btnTranscribe");
     var btnCancel = document.getElementById("btnCancelTranscribe");
     var prog = document.getElementById("transcribeProgressContainer");
 
-    if (btn) {
-        btn.disabled = false;
-        btn.innerText = "Transcribe Active Comp";
-    }
     if (btnCancel) btnCancel.style.display = "none";
     if (prog) prog.style.display = "none";
+    if (btn) {
+        btn.style.display = "";
+        btn.disabled = false;
+    }
 
+    updateScopeUI();
     showAlertModal("Transcription Cancelled", "Transcription cancelled by user.");
 }
 
 function runTranscribeWorkflow() {
+    if (isTranscribing) return; // Prevent double-trigger
+
     ensureLicensedAction("transcribe", function() {
         var btn = document.getElementById("btnTranscribe");
         var btnCancel = document.getElementById("btnCancelTranscribe");
@@ -833,18 +856,37 @@ function runTranscribeWorkflow() {
         if (successContainer) successContainer.style.display = "none";
 
         isTranscriptionCancelled = false;
-        var originalText = btn.innerText;
+        isTranscribing = true;
+
+        // Lock button UI: Hide primary Transcribe button and present only Cancel
         btn.disabled = true;
-        btn.innerText = "Checking Engine...";
+        btn.style.display = "none";
+        if (btnCancel) {
+            btnCancel.style.display = "block";
+            btnCancel.style.flex = "1";
+            btnCancel.disabled = false;
+        }
+        if (prog) prog.style.display = "block";
+        if (statusLog) statusLog.innerText = "Checking local engine...";
+        if (progFill) progFill.style.width = "10%";
+        if (progPct) progPct.innerText = "10%";
 
         DependencyInstaller.checkStatus(function(status) {
+            if (isTranscriptionCancelled) return;
+
             if (status && status.installed_models) {
                 updateModelDropdown(status.installed_models);
             }
 
             if (!status || !status.python || !status.whisper_pkg || !status.pytorch) {
-                btn.disabled = false;
-                btn.innerText = originalText;
+                isTranscribing = false;
+                if (btnCancel) btnCancel.style.display = "none";
+                if (prog) prog.style.display = "none";
+                if (btn) {
+                    btn.style.display = "";
+                    btn.disabled = false;
+                }
+                updateScopeUI();
                 showAlertModal("AI Runtime Error", "Bundled AI runtime not found. Please reinstall using install.bat.");
                 return;
             }
@@ -854,25 +896,34 @@ function runTranscribeWorkflow() {
             var installedModels = (status && status.installed_models) ? status.installed_models : [];
 
             if (installedModels.indexOf(selectedModel) === -1) {
-                btn.disabled = false;
-                btn.innerText = originalText;
+                isTranscribing = false;
+                if (btnCancel) btnCancel.style.display = "none";
+                if (prog) prog.style.display = "none";
+                if (btn) {
+                    btn.style.display = "";
+                    btn.disabled = false;
+                }
+                updateScopeUI();
                 showAlertModal("Model Required", "Selected model is not installed. Please download it from Settings -> Speech Models Manager.");
                 return;
             }
 
             if (!status.ffmpeg) {
-                btn.disabled = false;
-                btn.innerText = originalText;
+                isTranscribing = false;
+                if (btnCancel) btnCancel.style.display = "none";
+                if (prog) prog.style.display = "none";
+                if (btn) {
+                    btn.style.display = "";
+                    btn.disabled = false;
+                }
+                updateScopeUI();
                 showAlertModal("FFmpeg Error", "FFmpeg is missing from bin folder.");
                 return;
             }
 
-            btn.innerText = "Extracting Audio...";
-            if (btnCancel) btnCancel.style.display = "inline-block";
-            if (prog) prog.style.display = "block";
             if (statusLog) statusLog.innerText = "Extracting composition audio...";
-            if (progFill) progFill.style.width = "20%";
-            if (progPct) progPct.innerText = "20%";
+            if (progFill) progFill.style.width = "25%";
+            if (progPct) progPct.innerText = "25%";
 
             ExtendScriptBridge.getProjectDetails(function(projectDetails) {
                 if (isTranscriptionCancelled) return;
@@ -882,38 +933,39 @@ function runTranscribeWorkflow() {
                     if (isTranscriptionCancelled) return;
 
                     if (!exportRes || !exportRes.success) {
-                        btn.disabled = false;
-                        btn.innerText = originalText;
+                        isTranscribing = false;
                         if (btnCancel) btnCancel.style.display = "none";
                         if (prog) prog.style.display = "none";
+                        if (btn) {
+                            btn.style.display = "";
+                            btn.disabled = false;
+                        }
+                        updateScopeUI();
                         showAlertModal("Composition Error", exportRes ? exportRes.error : "No audio/video found on the active composition.");
                         return;
                     }
 
                     if (statusLog) statusLog.innerText = "Transcribing with Whisper AI...";
-                    if (progFill) progFill.style.width = "50%";
-                    if (progPct) progPct.innerText = "50%";
+                    if (progFill) progFill.style.width = "55%";
+                    if (progPct) progPct.innerText = "55%";
 
                     runPythonBackend(exportRes.audioPath, projectDetails, function(backendRes) {
+                        isTranscribing = false;
                         if (btnCancel) btnCancel.style.display = "none";
                         if (prog) prog.style.display = "none";
+                        if (btn) {
+                            btn.style.display = "";
+                            btn.disabled = false;
+                        }
+                        updateScopeUI();
+
                         if (isTranscriptionCancelled) return;
 
                         if (!backendRes || !backendRes.success) {
-                            btn.disabled = false;
-                            btn.innerText = originalText;
                             var rawErr = (backendRes && backendRes.error) ? backendRes.error : "Unknown backend engine error";
                             showAlertModal("Transcription Error", "Transcription failed.\n\nDetails:\n" + rawErr);
                             return;
                         }
-
-                        if (progFill) progFill.style.width = "100%";
-                        if (progPct) progPct.innerText = "100%";
-                        btn.disabled = false;
-                        btn.innerText = "Done!";
-                        setTimeout(function () {
-                            btn.innerText = originalText;
-                        }, 1800);
 
                         var offset = parseFloat(exportRes.exportStart) || 0;
                         var rawCaptions = backendRes.captions || backendRes.cues || backendRes.subtitles || [];
